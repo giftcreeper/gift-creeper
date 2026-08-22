@@ -28,7 +28,7 @@ export async function POST(req: Request) {
             content: [
               {
                 type: 'text',
-                text: '分析這張購物車截圖，精確提取所有商品。要求：\n1. product_name 必須【高度精簡】，只保留最核心的商品名稱（例如將「2026新款爆款包郵韓版大容量帆布袋網紅同款」精簡為「大容量帆布袋」），徹底去除非必要的修飾詞、行銷詞、SEO關鍵字與符號。\n2. 提取單價 price 與數量 quantity。\n3. 規格 spec 提取顏色、尺寸等簡短說明。\n嚴格僅輸出合法 JSON 格式：{"items":[{"product_name": string, "price": number, "quantity": number, "spec": string}]}'
+                text: '分析這張購物車截圖，精確提取所有商品。要求：\n1. product_name 必須高度精簡，只保留最核心的商品名稱，徹底去除非必要的修飾詞、行銷詞、SEO關鍵字與符號。\n2. 提取單價 price 與數量 quantity。\n3. 規格 spec 提取顏色或尺寸說明，【嚴禁包含「颜色分类：」、「顏色分類：」或「規格：」等前綴文字】，直接輸出純規格內容（例如將「颜色分类：米白色[大號]」簡化為「米白色[大號]」）。\n嚴格僅輸出合法 JSON 格式：{"items":[{"product_name": string, "price": number, "quantity": number, "spec": string}]}'
               },
               {
                 type: 'image_url',
