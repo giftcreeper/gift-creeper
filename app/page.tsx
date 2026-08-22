@@ -113,8 +113,8 @@ export default function GiftCreeperApp() {
 
   // --- 開單計算 Logic ---
   const [selectedClientId, setSelectedClientId] = useState('');
-  const [exchangeRate, setExchangeRate] = useState<number>(1.08);
-  const [serviceFeePct, setServiceFeePct] = useState<number>(15);
+  const [exchangeRate, setExchangeRate] = useState<number>(1.15);
+  const [serviceFeePct, setServiceFeePct] = useState<number>(30);
   const [shippingFeeRmb, setShippingFeeRmb] = useState<number>(50);
   const [orderNotes, setOrderNotes] = useState('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
@@ -132,7 +132,19 @@ export default function GiftCreeperApp() {
   };
 
   const updateOrderItem = (id: string, field: keyof OrderItem, value: any) => {
-    setOrderItems(orderItems.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setOrderItems(prevItems => {
+      const updated = prevItems.map(item => item.id === id ? { ...item, [field]: value } : item);
+      const isLastItem = prevItems[prevItems.length - 1].id === id;
+      
+      // 當在最後一列輸入「品名」且內容不為空時，自動擴充下一列
+      if (isLastItem && field === 'name' && value.toString().trim() !== '') {
+        return [
+          ...updated,
+          { id: Date.now().toString(), name: '', spec: '', unit_cost_rmb: 0, qty: 100 }
+        ];
+      }
+      return updated;
+    });
   };
 
   const calculations = useMemo(() => {
@@ -153,13 +165,21 @@ export default function GiftCreeperApp() {
 
     const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
 
+    // 過濾掉未填寫品名的空白列
+    const validItems = orderItems.filter(item => item.name.trim() !== '');
+
+    if (validItems.length === 0) {
+      alert('請至少填寫一個產品項目的品名！');
+      return;
+    }
+
     const newOrderData = {
       order_no: orderNo,
       client_id: selectedClientId,
       exchange_rate: exchangeRate,
       service_fee_pct: serviceFeePct,
       shipping_fee_rmb: shippingFeeRmb,
-      items: orderItems,
+      items: validItems,
       subtotal_rmb: calculations.subtotalRmb,
       grand_total_hkd: calculations.grandTotalHkd,
       status: 'Quoted' as const,
@@ -207,7 +227,7 @@ export default function GiftCreeperApp() {
             </div>
             <div>
               <h1 className="font-bold text-lg tracking-wide text-white">Gift Creeper</h1>
-              <p className="text-xs text-slate-400">禮品爬蟲 訂單管理系統</p>
+              <p className="text-xs text-slate-400">訂單管理系統</p>
             </div>
           </div>
 
@@ -340,20 +360,62 @@ export default function GiftCreeperApp() {
 
                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <div className="flex justify-between items-center border-b pb-2">
-                    <h3 className="font-bold text-slate-900 flex items-center gap-2"><PackageCheck className="w-5 h-5 text-indigo-600" /> 2. 禮品明細 (RMB)</h3>
-                    <button onClick={addOrderItem} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded font-medium flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> 增加項目</button>
+                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
+                      <PackageCheck className="w-5 h-5 text-indigo-600" /> 2. 產品明細 (RMB)
+                    </h3>
+                    <button onClick={addOrderItem} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5" /> 增加項目
+                    </button>
                   </div>
+
+                  {/* 欄位標號 Headings */}
+                  <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 px-3 pt-1">
+                    <span className="col-span-5">品名</span>
+                    <span className="col-span-3">顏色/類別</span>
+                    <span className="col-span-2">單價 (RMB)</span>
+                    <span className="col-span-2">數量</span>
+                  </div>
+
+                  {/* 項目列表 */}
                   {orderItems.map((item, index) => (
                     <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
                       <div className="flex justify-between text-xs text-slate-400 font-semibold">
                         <span>項目 #{index + 1}</span>
-                        {orderItems.length > 1 && <button onClick={() => removeOrderItem(item.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button>}
+                        {orderItems.length > 1 && (
+                          <button onClick={() => removeOrderItem(item.id)} className="text-red-500 hover:text-red-700">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                       <div className="grid grid-cols-12 gap-2">
-                        <input type="text" placeholder="禮品名稱" value={item.name} onChange={(e) => updateOrderItem(item.id, 'name', e.target.value)} className="col-span-5 border p-2 rounded text-sm bg-white" />
-                        <input type="text" placeholder="規格/備註" value={item.spec} onChange={(e) => updateOrderItem(item.id, 'spec', e.target.value)} className="col-span-3 border p-2 rounded text-sm bg-white" />
-                        <input type="number" placeholder="單價(RMB)" value={item.unit_cost_rmb || ''} onChange={(e) => updateOrderItem(item.id, 'unit_cost_rmb', parseFloat(e.target.value) || 0)} className="col-span-2 border p-2 rounded text-sm bg-white font-mono" />
-                        <input type="number" placeholder="數量" value={item.qty || ''} onChange={(e) => updateOrderItem(item.id, 'qty', parseInt(e.target.value) || 0)} className="col-span-2 border p-2 rounded text-sm bg-white font-mono" />
+                        <input
+                          type="text"
+                          placeholder="輸入品名"
+                          value={item.name}
+                          onChange={(e) => updateOrderItem(item.id, 'name', e.target.value)}
+                          className="col-span-5 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="顏色/類別"
+                          value={item.spec}
+                          onChange={(e) => updateOrderItem(item.id, 'spec', e.target.value)}
+                          className="col-span-3 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="單價(RMB)"
+                          value={item.unit_cost_rmb || ''}
+                          onChange={(e) => updateOrderItem(item.id, 'unit_cost_rmb', parseFloat(e.target.value) || 0)}
+                          className="col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
+                        />
+                        <input
+                          type="number"
+                          placeholder="數量"
+                          value={item.qty || ''}
+                          onChange={(e) => updateOrderItem(item.id, 'qty', parseInt(e.target.value) || 0)}
+                          className="col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
+                        />
                       </div>
                     </div>
                   ))}
@@ -481,7 +543,7 @@ export default function GiftCreeperApp() {
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6">
                 <div>
                   <h1 className="text-3xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
-                  <p className="text-xs text-slate-500 mt-1">禮品爬蟲禮品服務公司 | Gift Creeper Limited</p>
+                  <p className="text-xs text-slate-500 mt-1">禮品服務公司 | Gift Creeper Limited</p>
                 </div>
                 <div className="text-right">
                   <h2 className="text-2xl font-bold text-indigo-600">QUOTATION 報價單</h2>
