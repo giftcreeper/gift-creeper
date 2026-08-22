@@ -854,7 +854,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 (已補充 6 項完整 T&C 條款) */}
+        {/* TAB 5: 升級版專業報價單 (T&C 條款框架不超過頁面一半，字體進一步縮小) */}
         {activeTab === 'print' && selectedOrderForPrint && (() => {
           const totalQuantity = selectedOrderForPrint.items.reduce((sum, item) => sum + item.qty, 0);
           const rate = selectedOrderForPrint.exchange_rate || 1.15;
@@ -983,19 +983,20 @@ export default function GiftCreeperApp() {
                       <td colSpan={5} className="pt-6">
                         {/* 頁尾付款條款、T&C 與簽署欄 */}
                         <div className="space-y-6">
-                          <div className="grid grid-cols-12 gap-4 items-start">
-                            {/* 付款條款與 6 項 T&C 內容 */}
-                            <div className="col-span-8 space-y-2">
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">
-                                <p className="font-bold text-slate-900 flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 付款及服務條款 (Terms & Conditions)：
+                          <div className="flex justify-between items-start gap-4">
+                            
+                            {/* 付款條款與 6 項 T&C (限制寬度不超過頁面一半 w-1/2 / max-w-[50%]) */}
+                            <div className="w-1/2 max-w-[50%] space-y-1.5">
+                              <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 space-y-1">
+                                <p className="font-bold text-slate-900 flex items-center gap-1 text-[10.5px]">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 付款及服務條款 (Terms & Conditions)：
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
                                 {selectedOrderForPrint.notes && <p className="text-indigo-600 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
                                 
-                                {/* 完整 6 項 T&C 內容 */}
-                                <div className="pt-1.5 border-t border-slate-200 text-[10px] text-slate-500 space-y-1 leading-relaxed">
+                                {/* 縮小字體 (8.5px) 並嚴格靠左簡潔排版 */}
+                                <div className="pt-1 border-t border-slate-200 text-[8.5px] text-slate-500 space-y-0.5 leading-tight">
                                   <p>1. 上述貨品乃完全根據買方指定之品牌、型號、規格、品質標準及指定供應商進行採購與供貨。</p>
                                   <p>2. 貨品送達指定地點後，買方須於 3 個工作天內完成外觀及基本功能驗收。如逾期未收到買方之書面異議或修訂要求，即視為該批貨品已完全符合合約要求並完成順利交貨。</p>
                                   <p>3. 如因海關清關抽查/延誤、第三方物流服務商之運輸延誤、或任何不可抗力因素（包括但不限於惡劣天氣、政策變更）導致送貨延期，本公司概不承擔任何違約金、罰款或相關之間接商業損失。</p>
@@ -1007,7 +1008,7 @@ export default function GiftCreeperApp() {
                             </div>
 
                             {/* 總金額顯示區 */}
-                            <div className="col-span-4 text-right space-y-1 text-xs self-start pt-1">
+                            <div className="w-1/3 text-right space-y-1 text-xs self-start pt-1">
                               <div className="flex justify-between items-center pb-2 border-b-2 border-slate-900">
                                 <span className="font-bold text-xs text-slate-900 whitespace-nowrap">總金額 (Grand Total):</span>
                                 <span className="text-xl font-extrabold text-indigo-600 font-mono whitespace-nowrap ml-2">
