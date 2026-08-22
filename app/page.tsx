@@ -24,7 +24,8 @@ import {
   Image as ImageIcon,
   Loader2,
   Upload,
-  CheckCircle2
+  CheckCircle2,
+  Languages
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -33,6 +34,18 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+// 簡單輕量簡體轉繁體對照器
+const convertSimpToTrad = (str: string) => {
+  if (!str) return '';
+  const simp = "包装袋盒伞杯子笔笔记本套装钥匙扣手提袋帆布袋抱枕围巾礼品卡定制印制黑色白色红色蓝色黄色绿色";
+  const trad = "包裝袋盒傘杯子筆筆記本套裝鑰匙扣手提袋帆布袋抱枕圍巾禮品卡定制印製黑色白色紅色藍色黃色綠色";
+  let result = str;
+  for (let i = 0; i < simp.length; i++) {
+    result = result.replaceAll(simp[i], trad[i]);
+  }
+  return result;
+};
 
 interface Client {
   id: string;
@@ -74,15 +87,20 @@ export default function GiftCreeperApp() {
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
+  
+  // 公司 Logo URL State (可自訂)
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Supabase 資料同步 ---
   useEffect(() => {
     if (supabase) {
       fetchClients();
       fetchOrders();
     }
+    const savedLogo = localStorage.getItem('company_logo_url');
+    if (savedLogo) setCompanyLogoUrl(savedLogo);
   }, []);
 
   const fetchClients = async () => {
@@ -109,21 +127,38 @@ export default function GiftCreeperApp() {
     return clients.find(c => c.id === selectedOrderForPrint.client_id) || (selectedOrderForPrint as any).client_info || null;
   }, [selectedOrderForPrint, clients]);
 
-  // 格式化日期為 YYYY-MM-DD
   const formatDateYYYYMMDD = (dateStr?: string) => {
     if (!dateStr) {
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     }
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // 上傳公司 Logo
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = reader.result as string;
+        setCompanyLogoUrl(url);
+        localStorage.setItem('company_logo_url', url);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // 列印並自動設定下載 PDF 檔案名稱
+  const handlePrintQuotation = () => {
+    if (selectedOrderForPrint) {
+      const originalTitle = document.title;
+      document.title = selectedOrderForPrint.order_no; // 將網頁標題設為單號，匯出 PDF 時檔案名會自動預設為單號
+      window.print();
+      setTimeout(() => { document.title = originalTitle; }, 1000);
+    }
   };
 
   // --- 客戶管理表單 ---
@@ -144,7 +179,7 @@ export default function GiftCreeperApp() {
     alert('成功新增客戶紀錄！');
   };
 
-  // --- 開單與編輯狀態 Logic ---
+  // --- 開單與編輯狀態 ---
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [exchangeRate, setExchangeRate] = useState<number>(1.15);
@@ -201,23 +236,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
-      if (imageFiles.length > 0) {
-        await handleProcessScreenshots(imageFiles);
-      }
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
   const convertFileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -231,19 +249,6 @@ export default function GiftCreeperApp() {
     setIsParsingScreenshot(true);
     try {
       const base64List = await Promise.all(files.map(f => convertFileToBase64(f)));
-
-      if (supabase && files[0]) {
-        try {
-          const fileName = `screenshot-${Date.now()}.png`;
-          const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, files[0]);
-          if (storageData) {
-            const { data: { publicUrl } } = supabase.storage.from('order-screenshots').getPublicUrl(fileName);
-            setUploadedScreenshotUrl(publicUrl);
-          }
-        } catch (storageErr) {
-          console.warn('Storage error:', storageErr);
-        }
-      }
 
       const res = await fetch('/api/parse-cart-screenshot', {
         method: 'POST',
@@ -261,8 +266,8 @@ export default function GiftCreeperApp() {
       if (data.success && data.items && data.items.length > 0) {
         const aiRows: OrderItem[] = data.items.map((item: any, idx: number) => ({
           id: `ai-${Date.now()}-${idx}`,
-          name: item.product_name || '未命名商品',
-          spec: item.spec || '',
+          name: convertSimpToTrad(item.product_name || '未命名商品'), // 自動簡轉繁
+          spec: convertSimpToTrad(item.spec || ''),                   // 自動簡轉繁
           unit_cost_rmb: Number(item.price) || 0,
           qty: Number(item.quantity) || 100,
           isAiGenerated: true
@@ -273,7 +278,7 @@ export default function GiftCreeperApp() {
           return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
         });
 
-        alert(`✨ AI 成功解析 ${files.length} 張圖，一共提取了 ${aiRows.length} 項商品！`);
+        alert(`✨ AI 成功解析 ${files.length} 張圖，並已自動將品名與規格轉換為繁體中文！`);
       } else {
         alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
@@ -325,7 +330,14 @@ export default function GiftCreeperApp() {
       return;
     }
 
-    const validItems = orderItems.filter(item => item.name.trim() !== '');
+    const validItems = orderItems
+      .filter(item => item.name.trim() !== '')
+      .map(item => ({
+        ...item,
+        name: convertSimpToTrad(item.name),
+        spec: convertSimpToTrad(item.spec)
+      }));
+
     if (validItems.length === 0) {
       alert('請至少填寫一個產品項目的品名！');
       return;
@@ -427,17 +439,6 @@ export default function GiftCreeperApp() {
     return { totalSales, pendingOrders, completedOrders, totalClients: clients.length };
   }, [orders, clients]);
 
-  const printPages = useMemo(() => {
-    if (!selectedOrderForPrint || !selectedOrderForPrint.items) return [];
-    const items = selectedOrderForPrint.items;
-    const pages = [];
-    const pageSize = 20;
-    for (let i = 0; i < items.length; i += pageSize) {
-      pages.push(items.slice(i, i + pageSize));
-    }
-    return pages.length > 0 ? pages : [[]];
-  }, [selectedOrderForPrint]);
-
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800">
       {/* 側邊導覽列 */}
@@ -479,8 +480,16 @@ export default function GiftCreeperApp() {
             </button>
           </nav>
         </div>
-        <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 p-3 rounded-lg">
+        <div className="p-4 border-t border-slate-800 space-y-2">
+          <button 
+            onClick={() => logoInputRef.current?.click()} 
+            className="w-full text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 p-2.5 rounded-lg flex items-center justify-center gap-2"
+          >
+            <Upload className="w-3.5 h-3.5 text-indigo-400" /> 設定公司 Logo
+          </button>
+          <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
+
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 p-2.5 rounded-lg">
             <span className={`w-2 h-2 rounded-full ${supabase ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
             {supabase ? 'Supabase 已連線' : '未設定 Supabase 金鑰'}
           </div>
@@ -573,8 +582,6 @@ export default function GiftCreeperApp() {
 
             {/* AI 快捷填單區 */}
             <div 
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
               onClick={() => fileInputRef.current?.click()}
               className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors cursor-pointer rounded-xl p-5 text-center shadow-sm relative overflow-hidden group"
             >
@@ -589,25 +596,18 @@ export default function GiftCreeperApp() {
 
               <div className="flex items-center justify-center gap-2 text-indigo-900 font-bold text-base mb-1">
                 <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
-                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【拖曳 / 點擊選取多張圖片】
+                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【點擊選取多張圖片】
               </div>
 
               <p className="text-xs text-indigo-600 flex items-center justify-center gap-1 mt-1">
-                <Upload className="w-3.5 h-3.5" />
-                支援一次上傳多張淘寶購物車截圖，AI 將自動合併所有商品並填入表格
+                <Languages className="w-3.5 h-3.5" />
+                支援淘寶購物車多圖解析，並自動將商品名稱與規格轉換為繁體中文
               </p>
 
               {isParsingScreenshot && (
                 <div className="mt-3 inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-medium animate-bounce shadow">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Qwen-VL 視覺 AI 解析多圖中...
-                </div>
-              )}
-
-              {uploadedScreenshotUrl && (
-                <div className="mt-2 text-xs text-slate-500 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                  <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                  已上傳截圖備份：<a href={uploadedScreenshotUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">檢視原圖</a>
+                  Qwen-VL 視覺 AI 解析並轉換繁體中...
                 </div>
               )}
             </div>
@@ -633,7 +633,7 @@ export default function GiftCreeperApp() {
                   </div>
 
                   <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 px-3 pt-1">
-                    <span className="col-span-5">品名</span>
+                    <span className="col-span-5">品名 (自動繁體)</span>
                     <span className="col-span-3">顏色/類別</span>
                     <span className="col-span-2">單價 (RMB)</span>
                     <span className="col-span-2">數量</span>
@@ -644,7 +644,7 @@ export default function GiftCreeperApp() {
                       <div className="flex justify-between text-xs font-semibold">
                         <span className={item.isAiGenerated ? 'text-indigo-600 flex items-center gap-1' : 'text-slate-400'}>
                           {item.isAiGenerated && <Sparkles className="w-3 h-3 inline" />}
-                          項目 #{index + 1} {item.isAiGenerated && '(AI 自動填入)'}
+                          項目 #{index + 1} {item.isAiGenerated && '(AI 自動繁體化)'}
                         </span>
                         {orderItems.length > 1 && (
                           <button onClick={() => removeOrderItem(item.id)} className="text-red-500 hover:text-red-700">
@@ -822,7 +822,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 (重現 Subtotal、服務費及運費明細) */}
+        {/* TAB 5: 升級版專業報價單 (支援 HTML 列印自動跨頁 Header/客戶欄 重覆 + 自動 PDF 檔名 + 電子公司印) */}
         {activeTab === 'print' && selectedOrderForPrint && (
           <div className="space-y-6 max-w-4xl mx-auto">
             {/* 頂部操作按鈕 */}
@@ -831,121 +831,118 @@ export default function GiftCreeperApp() {
                 ← 返回訂單列表
               </button>
               <button 
-                onClick={() => window.print()} 
+                onClick={handlePrintQuotation} 
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-all transform hover:scale-105"
               >
-                <Printer className="w-4 h-4" /> 列印 / 下載專業 PDF
+                <Printer className="w-4 h-4" /> 列印 / 下載 PDF ({selectedOrderForPrint.order_no}.pdf)
               </button>
             </div>
 
-            {/* 多頁渲染 container */}
-            <div className="space-y-8 print:space-y-0">
-              {printPages.map((pageItems, pageIdx) => {
-                const isLastPage = pageIdx === printPages.length - 1;
-
-                // 計算列印的細項金額
-                const rate = selectedOrderForPrint.exchange_rate || 1.15;
-                const servicePct = selectedOrderForPrint.service_fee_pct || 0;
-                const shippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
-
-                const subtotalHkd = selectedOrderForPrint.subtotal_rmb * rate;
-                const serviceFeeHkd = subtotalHkd * (servicePct / 100);
-                const shippingHkd = shippingRmb * rate;
-
-                return (
-                  <div 
-                    key={pageIdx} 
-                    className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 space-y-6 font-sans text-slate-800 relative print:break-after-page"
-                    style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}
-                  >
-                    {/* Header 抬頭 */}
-                    <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
-                      <div className="space-y-1">
-                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
-                        <p className="text-sm font-bold text-indigo-600">博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
-                        <div className="text-xs text-slate-500 space-y-0.5 pt-1">
-                          <p>📞 電話: +852 4624 0018 | ✉️ 電郵: GIFTCREEPER@GMAIL.COM</p>
-                        </div>
-                      </div>
-                      <div className="text-right space-y-2">
-                        <div className="inline-block bg-slate-900 text-white px-4 py-1.5 rounded text-sm font-extrabold tracking-widest uppercase shadow-sm">
-                          QUOTATION 報價單 {printPages.length > 1 && `(${pageIdx + 1}/${printPages.length})`}
-                        </div>
-                        <div className="text-xs text-slate-600 space-y-0.5 font-mono">
-                          <p><span className="text-slate-400">報價單號:</span> <strong className="text-slate-900">{selectedOrderForPrint.order_no}</strong></p>
-                          <p><span className="text-slate-400">發單日期:</span> {formatDateYYYYMMDD(selectedOrderForPrint.created_at)}</p>
-                          <p><span className="text-slate-400">有效期至:</span> 30 天內有效</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Client Info 客戶資料欄 */}
-                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-                      <div className="space-y-0.5">
-                        <p className="font-bold text-indigo-600 uppercase tracking-wider">Customer / Client 客戶資料：</p>
-                        <h2 className="text-base font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
-                        {currentPrintClient && (
-                          <div className="text-slate-600 space-y-0.5 pt-0.5">
-                            {currentPrintClient.contact_person && <p>聯絡人: <strong>{currentPrintClient.contact_person}</strong> {currentPrintClient.phone && `| ${currentPrintClient.phone}`}</p>}
-                            {currentPrintClient.address && <p>地址: {currentPrintClient.address}</p>}
+            {/* A4 容器 */}
+            <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800">
+              
+              {/* 使用標準 HTML Table 結構，讓 thead 可以在多頁列印時於新一頁頂部自動重覆顯示 Header 及客戶資料 */}
+              <table className="w-full text-left border-collapse">
+                <thead className="print:table-header-group">
+                  <tr>
+                    <td colSpan={5} className="pb-4">
+                      {/* 公司 Header (含 Logo) */}
+                      <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                        <div className="flex items-center gap-4">
+                          {companyLogoUrl ? (
+                            <img src={companyLogoUrl} alt="Company Logo" className="h-14 object-contain max-w-[160px]" />
+                          ) : (
+                            <div className="w-12 h-12 bg-indigo-600 text-white font-black text-xl rounded-xl flex items-center justify-center shadow">
+                              GC
+                            </div>
+                          )}
+                          <div>
+                            <h1 className="text-xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
+                            <p className="text-xs font-bold text-indigo-600">博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
+                            <p className="text-[11px] text-slate-500 pt-0.5">📞 電話: +852 4624 0018 | ✉️ 電郵: GIFTCREEPER@GMAIL.COM</p>
                           </div>
-                        )}
-                      </div>
-                      <div className="text-right flex flex-col justify-between">
-                        <div>
-                          <p className="font-bold text-slate-400 uppercase tracking-wider">Status 狀態：</p>
-                          <span className="inline-block mt-0.5 px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded">
-                            {selectedOrderForPrint.status === 'Quoted' ? '待確認報價 (Quoted)' : selectedOrderForPrint.status}
-                          </span>
+                        </div>
+                        <div className="text-right space-y-1">
+                          <div className="inline-block bg-slate-900 text-white px-3 py-1 rounded text-xs font-extrabold tracking-widest uppercase shadow-sm">
+                            QUOTATION 報價單
+                          </div>
+                          <div className="text-xs text-slate-600 space-y-0.5 font-mono pt-1">
+                            <p><span className="text-slate-400">報價單號:</span> <strong className="text-slate-900">{selectedOrderForPrint.order_no}</strong></p>
+                            <p><span className="text-slate-400">發單日期:</span> {formatDateYYYYMMDD(selectedOrderForPrint.created_at)}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* 明細表格 Table */}
-                    <div className="overflow-hidden rounded-lg border border-slate-300">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-slate-900 text-white uppercase tracking-wider">
-                            <th className="p-2.5 w-10 text-center">#</th>
-                            <th className="p-2.5">產品名稱與規格說明 (Item & Specifications)</th>
-                            <th className="p-2.5 text-center w-16">數量</th>
-                            <th className="p-2.5 text-right w-24">單價 (RMB)</th>
-                            <th className="p-2.5 text-right w-28">小計 (HKD)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 bg-white">
-                          {pageItems.map((item, idx) => {
-                            const globalIndex = pageIdx * 20 + idx + 1;
-                            const itemHkdTotal = Math.round(
-                              (item.unit_cost_rmb * item.qty) * selectedOrderForPrint.exchange_rate * (1 + selectedOrderForPrint.service_fee_pct / 100)
-                            );
+                      {/* 客戶資料欄 (每頁重覆) */}
+                      <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs mt-4">
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-indigo-600 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
+                          <h2 className="text-sm font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
+                          {currentPrintClient && (
+                            <div className="text-slate-600 space-y-0.5 pt-0.5 text-[11px]">
+                              {currentPrintClient.contact_person && <p>聯絡人: <strong>{currentPrintClient.contact_person}</strong> {currentPrintClient.phone && `| ${currentPrintClient.phone}`}</p>}
+                              {currentPrintClient.address && <p>地址: {currentPrintClient.address}</p>}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-right flex flex-col justify-between">
+                          <div>
+                            <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Status 狀態：</p>
+                            <span className="inline-block mt-0.5 px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded text-[11px]">
+                              {selectedOrderForPrint.status === 'Quoted' ? '待確認報價 (Quoted)' : selectedOrderForPrint.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
 
-                            return (
-                              <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                <td className="p-2.5 text-center text-slate-400 font-mono">{globalIndex}</td>
-                                <td className="p-2.5">
-                                  <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
-                                    <span>{item.name}</span>
-                                    {item.spec && (
-                                      <span className="font-normal text-slate-500 text-[11px]">
-                                        ({item.spec})
-                                      </span>
-                                    )}
-                                  </div>
-                                </td>
-                                <td className="p-2.5 text-center font-mono font-medium">{item.qty}</td>
-                                <td className="p-2.5 text-right font-mono text-slate-600">¥ {item.unit_cost_rmb.toFixed(2)}</td>
-                                <td className="p-2.5 text-right font-mono font-bold text-slate-900">HK$ {itemHkdTotal.toLocaleString()}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                  {/* 表格抬頭 */}
+                  <tr className="bg-slate-900 text-white uppercase text-[11px] tracking-wider">
+                    <th className="p-2.5 w-10 text-center">#</th>
+                    <th className="p-2.5">產品名稱與規格說明 (Item & Specifications)</th>
+                    <th className="p-2.5 text-center w-16">數量</th>
+                    <th className="p-2.5 text-right w-24">單價 (RMB)</th>
+                    <th className="p-2.5 text-right w-28">小計 (HKD)</th>
+                  </tr>
+                </thead>
 
-                    {/* 頁尾付款條款與費用明細（重現 Subtotal、服務費及運費） */}
-                    {isLastPage ? (
-                      <div className="space-y-6 pt-1">
+                <tbody className="divide-y divide-slate-200 bg-white text-xs">
+                  {selectedOrderForPrint.items.map((item, idx) => {
+                    const itemHkdTotal = Math.round(
+                      (item.unit_cost_rmb * item.qty) * selectedOrderForPrint.exchange_rate * (1 + selectedOrderForPrint.service_fee_pct / 100)
+                    );
+
+                    // 自動繁體轉換呈現
+                    const tradName = convertSimpToTrad(item.name);
+                    const tradSpec = convertSimpToTrad(item.spec);
+
+                    return (
+                      <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <td className="p-2.5 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="p-2.5">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                            <span>{tradName}</span>
+                            {tradSpec && (
+                              <span className="font-normal text-slate-500 text-[11px]">
+                                ({tradSpec})
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-2.5 text-center font-mono font-medium">{item.qty}</td>
+                        <td className="p-2.5 text-right font-mono text-slate-600">¥ {item.unit_cost_rmb.toFixed(2)}</td>
+                        <td className="p-2.5 text-right font-mono font-bold text-slate-900">HK$ {itemHkdTotal.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+
+                <tfoot>
+                  <tr>
+                    <td colSpan={5} className="pt-6">
+                      {/* 頁尾付款條款、費用計算與電子公司印 */}
+                      <div className="space-y-6">
                         <div className="grid grid-cols-12 gap-4 items-end">
                           <div className="col-span-6 space-y-1">
                             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-0.5">
@@ -961,18 +958,18 @@ export default function GiftCreeperApp() {
                           <div className="col-span-6 text-right space-y-1 text-xs">
                             <div className="flex justify-between text-slate-500">
                               <span>貨品折合 (HKD Subtotal):</span>
-                              <span className="font-mono">HK$ {Math.round(subtotalHkd).toLocaleString()}</span>
+                              <span className="font-mono">HK$ {Math.round(selectedOrderForPrint.subtotal_rmb * selectedOrderForPrint.exchange_rate).toLocaleString()}</span>
                             </div>
-                            {servicePct > 0 && (
+                            {selectedOrderForPrint.service_fee_pct > 0 && (
                               <div className="flex justify-between text-slate-500">
-                                <span>服務費 / 利潤加成 ({servicePct}%):</span>
-                                <span className="font-mono">HK$ {Math.round(serviceFeeHkd).toLocaleString()}</span>
+                                <span>服務費 / 利潤加成 ({selectedOrderForPrint.service_fee_pct}%):</span>
+                                <span className="font-mono">HK$ {Math.round(selectedOrderForPrint.subtotal_rmb * selectedOrderForPrint.exchange_rate * (selectedOrderForPrint.service_fee_pct / 100)).toLocaleString()}</span>
                               </div>
                             )}
-                            {shippingRmb > 0 && (
+                            {selectedOrderForPrint.shipping_fee_rmb > 0 && (
                               <div className="flex justify-between text-slate-500">
                                 <span>國內運費 (Freight Fee):</span>
-                                <span className="font-mono">HK$ {Math.round(shippingHkd).toLocaleString()}</span>
+                                <span className="font-mono">HK$ {Math.round(selectedOrderForPrint.shipping_fee_rmb * selectedOrderForPrint.exchange_rate).toLocaleString()}</span>
                               </div>
                             )}
                             <div className="flex justify-between items-center pt-2 border-t-2 border-slate-900">
@@ -984,14 +981,21 @@ export default function GiftCreeperApp() {
                           </div>
                         </div>
 
-                        {/* 簽署區 */}
+                        {/* 簽署區（含紅色電子公司印章） */}
                         <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs text-slate-600">
                           <div className="space-y-6">
-                            <div className="border-b border-slate-400 h-10 w-3/4 mx-auto"></div>
+                            <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
                             <p className="font-bold text-slate-800">客戶確認簽署及蓋單章<br/><span className="text-slate-400 font-normal text-[10px]">(Customer Accepted & Chopped)</span></p>
                           </div>
-                          <div className="space-y-6">
-                            <div className="border-b border-slate-400 h-10 w-3/4 mx-auto"></div>
+                          <div className="space-y-2 relative">
+                            {/* 電的公司印章 (CSS SVG 擬真外框印章) */}
+                            <div className="absolute -top-4 right-12 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                              <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
+                              <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
+                              <span className="text-[8px] font-bold">CHOP / SIGN</span>
+                            </div>
+
+                            <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
                             <p className="font-bold text-slate-800">GIFT CREEPER TRADING CO. 授權簽署<br/><span className="text-slate-400 font-normal text-[10px]">(Authorized Signature & Chop)</span></p>
                           </div>
                         </div>
@@ -1000,14 +1004,11 @@ export default function GiftCreeperApp() {
                           Thank you for your business! 多謝惠顧，期待再次為您服務。
                         </div>
                       </div>
-                    ) : (
-                      <div className="text-right text-xs text-slate-400 font-mono pt-2">
-                        -- 接下頁 (Continued on next page) --
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+
             </div>
           </div>
         )}
