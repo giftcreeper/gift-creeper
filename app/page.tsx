@@ -73,7 +73,6 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
 
-  // 用於點擊上傳圖檔的隱藏 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Supabase 資料同步 ---
@@ -133,7 +132,7 @@ export default function GiftCreeperApp() {
   const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
   const [uploadedScreenshotUrl, setUploadedScreenshotUrl] = useState<string | null>(null);
 
-  // 監聽 Ctrl+V / Cmd+V 貼上截圖事件
+  // 監聽 Ctrl+V / Cmd+V 貼上多張截圖事件
   useEffect(() => {
     if (activeTab !== 'create_order') return;
 
@@ -141,13 +140,16 @@ export default function GiftCreeperApp() {
       const clipboardItems = e.clipboardData?.items;
       if (!clipboardItems) return;
 
-      for (const item of clipboardItems) {        if (item.type.startsWith('image/')) {
+      const imageFiles: File[] = [];
+      for (const item of clipboardItems) {
+        if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            await handleProcessScreenshot(file);
-          }
-          break;
+          if (file) imageFiles.push(file);
         }
+      }
+
+      if (imageFiles.length > 0) {
+        await handleProcessScreenshots(imageFiles);
       }
     };
 
@@ -155,23 +157,25 @@ export default function GiftCreeperApp() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [activeTab, orderItems]);
 
-  // 處理點擊檔案選擇器上傳
+  // 點擊選擇多圖
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      await handleProcessScreenshot(file);
-      // 清空 input 讓重複選相同檔案也能觸發 onChange
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await handleProcessScreenshots(Array.from(files));
       e.target.value = '';
     }
   };
 
-  // 處理拖曳上傳 (Drag & Drop)
+  // 拖曳多圖
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      await handleProcessScreenshot(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const imageFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+      if (imageFiles.length > 0) {
+        await handleProcessScreenshots(imageFiles);
+      }
     }
   };
 
@@ -189,28 +193,32 @@ export default function GiftCreeperApp() {
     });
   };
 
-  const handleProcessScreenshot = async (file: File) => {
+  // 處理多圖批次辨識
+  const handleProcessScreenshots = async (files: File[]) => {
     setIsParsingScreenshot(true);
-    try {      // 1. 上傳至 Supabase Storage (若有設定 Bucket)
-      if (supabase) {
+    try {
+      // 1. 轉為 Base64 陣列
+      const base64List = await Promise.all(files.map(f => convertFileToBase64(f)));
+
+      // 2. 上傳第一張圖到 Supabase Storage 做範例存檔 (若有需要)
+      if (supabase && files[0]) {
         try {
           const fileName = `screenshot-${Date.now()}.png`;
-          const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, file);
+          const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, files[0]);
           if (storageData) {
             const { data: { publicUrl } } = supabase.storage.from('order-screenshots').getPublicUrl(fileName);
             setUploadedScreenshotUrl(publicUrl);
           }
         } catch (storageErr) {
-          console.warn('Supabase Storage 上傳失敗 (可忽略):', storageErr);
+          console.warn('Storage error:', storageErr);
         }
       }
 
-      // 2. 轉為 Base64 並發送給 AI API 辨識
-      const base64 = await convertFileToBase64(file);
+      // 3. 發送至後端並行辨識
       const res = await fetch('/api/parse-cart-screenshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64 }),
+        body: JSON.stringify({ imagesBase64: base64List }),
       });
 
       if (!res.ok) {
@@ -235,14 +243,15 @@ export default function GiftCreeperApp() {
           return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
         });
 
-        alert(`✨ AI 成功辨識出 ${aiRows.length} 項商品並自動填入！`);
+        alert(`✨ AI 成功解析 ${files.length} 張圖，一共提取了 ${aiRows.length} 項商品！`);
       } else {
         alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
     } catch (err: any) {
       console.error(err);
       alert(`❌ 截圖辨識過程發生錯誤：${err.message || '未知錯誤'}`);
-    } finally {      setIsParsingScreenshot(false);
+    } finally {
+      setIsParsingScreenshot(false);
     }
   };
 
@@ -456,50 +465,50 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 2: 建立新訂單 (包含 AI 貼上與點擊/拖曳上傳功能) */}
+        {/* TAB 2: 建立新訂單 (支援多圖上傳) */}
         {activeTab === 'create_order' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             <header>
               <h2 className="text-2xl font-bold text-slate-900">建立新訂單</h2>
             </header>
 
-            {/* AI 快捷填單區 (支援 貼上、拖曳、點擊上傳) */}
+            {/* AI 快捷填單區 (支援多圖選擇 / 拖曳 / 貼上) */}
             <div 
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               onClick={() => fileInputRef.current?.click()}
               className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors cursor-pointer rounded-xl p-5 text-center shadow-sm relative overflow-hidden group"
             >
-              {/* 隱藏的 File Input */}
               <input 
                 type="file" 
                 ref={fileInputRef} 
                 onChange={handleFileUpload} 
                 accept="image/*" 
+                multiple
                 className="hidden" 
               />
 
               <div className="flex items-center justify-center gap-2 text-indigo-900 font-bold text-base mb-1">
                 <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
-                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【拖曳 / 點擊此處上傳圖片】
+                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【拖曳 / 點擊選取多張圖片】
               </div>
 
               <p className="text-xs text-indigo-600 flex items-center justify-center gap-1 mt-1">
                 <Upload className="w-3.5 h-3.5" />
-                點擊選擇電腦上的淘寶購物車圖檔（Qwen-VL 自動辨識品名、單價、數量與規格）
+                支援一次上傳多張淘寶購物車截圖，AI 將自動合併所有商品並填入表格
               </p>
 
               {isParsingScreenshot && (
                 <div className="mt-3 inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-medium animate-bounce shadow">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Qwen-VL 視覺 AI 解析截圖中...
+                  Qwen-VL 視覺 AI 解析多圖中...
                 </div>
               )}
 
               {uploadedScreenshotUrl && (
                 <div className="mt-2 text-xs text-slate-500 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
-                  已上傳並存檔截圖：<a href={uploadedScreenshotUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">檢視原圖</a>
+                  已上傳截圖備份：<a href={uploadedScreenshotUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">檢視原圖</a>
                 </div>
               )}
             </div>
