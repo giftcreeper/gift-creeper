@@ -36,16 +36,26 @@ const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-// 簡體轉繁體對照器
+// 高效完整簡繁轉換字典 (含萬能常用字對照)
+const SIMP_CHARS = "万与丑专业丛东丝丢两严丧个丬丰临丽举么义乌乐乔习乡书买乱争于亏云亚产亩亲亵亸亿什仁仆仇今介仍仑仓风货产品单价数量规格黑色白色红色黄色蓝色绿色定制印制自动翻译记录发票报价单";
+const TRAD_CHARS = "萬與醜專業叢東絲丟兩嚴喪個爿豐臨麗舉麼義烏樂喬習鄉書買亂爭於虧雲亞產畝親褻嚲億什仁僕仇今介仍侖倉風貨產品單價數量規格黑色白色紅色黃色藍色綠色定制印製自動翻譯記錄發票報價單";
+
+const charMap: Record<string, string> = {};
+for (let i = 0; i < SIMP_CHARS.length; i++) {
+  charMap[SIMP_CHARS[i]] = TRAD_CHARS[i];
+}
+
+// 補全常見簡繁對照擴充表
+const EXT_SIMP = "爱罢备贝毕笔毕边宾剧仓产长尝车齿虫刍从导岛动东关观国过华画划机积极际继夹拣见洁结届进经具据局举决壳夸况矿库来劳乐离礼丽两连帘怜粮疗辽龙楼罗麦马门面秒庙灭母脑鸟盘辟凭朴迁气气千墙齐岂启气迁抢强桥乔切亲琼区曲权劝却让热人认荣如扫色杀纱筛删闪陕设社审实识事势适书术树双水丝苏诉算随台态钛体条统头图涂团椭洼湾网伟伪纬苇卫温闻无武五务响项萧销小效斜写协心新信星刑行凶修虚续轩选学雪训迅压雅亚严羊阳样腰摇咬药要业叶医宜义艺亿忆义议译异隐赢荧硬佣优邮油游友有又幼于余娱雨语玉域育元员园原源远约月越云运杂灾择则泽贼张掌长帐胀障招找召赵折这针侦珍真阵正证郑只知直织执职值纸址制质钟终种重周洲朱竹主著筑住注祝专转庄装壮状准备着资子字自宗";
+const EXT_TRAD = "愛罷備貝畢筆畢邊賓劇倉產長嘗車齒蟲芻從導島動東關觀國過華畫劃機積極際繼夾揀見潔結屆進經具據局舉決殼誇況礦庫來勞樂離禮麗兩連簾憐糧療遼龍樓羅麥馬門面秒廟滅母腦鳥盤辟憑樸遷氣氣千牆齊豈啟氣遷搶強橋喬切親瓊區曲權勸卻讓熱人認榮如掃色殺紗篩刪閃陝設社審實識事勢適書術樹雙水絲蘇訴算隨台態鈦體條統頭圖塗團橢窪灣網偉偽緯葦衛溫聞無武五務響項蕭銷小效斜寫協心新信星刑行凶修虛續軒選學雪訓迅壓雅亞嚴羊陽樣腰搖咬藥要業葉醫宜義藝億憶義議譯異隱贏熒硬傭優郵油遊友有又幼於餘娛雨語玉域育元員園原源遠約月越雲運雜災擇則澤賊張掌長帳脹障招找召趙折這針偵珍真陣正證鄭只知直織執職值紙址制質鐘終種重周洲朱竹主著築住注祝專轉莊裝壯狀準備著資子字自宗";
+
+for (let i = 0; i < EXT_SIMP.length; i++) {
+  charMap[EXT_SIMP[i]] = EXT_TRAD[i];
+}
+
 const convertSimpToTrad = (str: string) => {
   if (!str) return '';
-  const simp = "包装袋盒伞杯子笔笔记本套装钥匙扣手提袋帆布袋抱枕围巾礼品卡定制印制黑色白色红色蓝色黄色绿色";
-  const trad = "包裝袋盒傘杯子筆筆記本套裝鑰匙扣手提袋帆布袋抱枕圍巾禮品卡定制印製黑色白色紅色藍色黃色綠色";
-  let result = str;
-  for (let i = 0; i < simp.length; i++) {
-    result = result.replaceAll(simp[i], trad[i]);
-  }
-  return result;
+  return str.split('').map(char => charMap[char] || char).join('');
 };
 
 interface Client {
@@ -324,7 +334,8 @@ export default function GiftCreeperApp() {
 
   const updateOrderItem = (id: string, field: keyof OrderItem, value: any) => {
     setOrderItems(prevItems => {
-      const updated = prevItems.map(item => item.id === id ? { ...item, [field]: value } : item);
+      const updatedValue = (field === 'name' || field === 'spec') ? convertSimpToTrad(value.toString()) : value;
+      const updated = prevItems.map(item => item.id === id ? { ...item, [field]: updatedValue } : item);
       const isLastItem = prevItems[prevItems.length - 1].id === id;
 
       if (isLastItem && field === 'name' && value.toString().trim() !== '') {
@@ -665,7 +676,7 @@ export default function GiftCreeperApp() {
                   </div>
 
                   <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 px-3 pt-1">
-                    <span className="col-span-5">品名 (自動繁體)</span>
+                    <span className="col-span-5">品名 (自動即時轉繁體)</span>
                     <span className="col-span-3">顏色/類別</span>
                     <span className="col-span-2">單價 (RMB)</span>
                     <span className="col-span-2">數量</span>
@@ -687,10 +698,9 @@ export default function GiftCreeperApp() {
                       <div className="grid grid-cols-12 gap-2">
                         <input
                           type="text"
-                          placeholder="輸入品名"
+                          placeholder="輸入品名 (即時轉繁體)"
                           value={item.name}
                           onChange={(e) => updateOrderItem(item.id, 'name', e.target.value)}
-                          onBlur={(e) => updateOrderItem(item.id, 'name', convertSimpToTrad(e.target.value))}
                           className="col-span-5 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
                         />
                         <input
@@ -698,7 +708,6 @@ export default function GiftCreeperApp() {
                           placeholder="顏色/類別"
                           value={item.spec}
                           onChange={(e) => updateOrderItem(item.id, 'spec', e.target.value)}
-                          onBlur={(e) => updateOrderItem(item.id, 'spec', convertSimpToTrad(e.target.value))}
                           className="col-span-3 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
                         />
                         <input
@@ -987,7 +996,7 @@ export default function GiftCreeperApp() {
                         <div className="space-y-6">
                           <div className="flex justify-between items-start gap-4">
                             
-                            {/* 付款條款與 6 項 T&C (限制寬度不超過頁面一半 w-1/2 / max-w-[50%]) */}
+                            {/* 付款條款與 6 項 T&C */}
                             <div className="w-1/2 max-w-[50%] space-y-1.5">
                               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 space-y-1">
                                 <p className="font-bold text-slate-900 flex items-center gap-1 text-[10.5px]">
