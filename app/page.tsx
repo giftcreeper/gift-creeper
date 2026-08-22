@@ -10,6 +10,7 @@ import {
   Printer,
   Plus,
   Trash2,
+  Edit,
   Search,
   Building,
   Phone,
@@ -119,7 +120,8 @@ export default function GiftCreeperApp() {
     alert('成功新增客戶紀錄！');
   };
 
-  // --- 開單與 AI 截圖辨識 Logic ---
+  // --- 開單與編輯狀態 Logic ---
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [exchangeRate, setExchangeRate] = useState<number>(1.15);
   const [serviceFeePct, setServiceFeePct] = useState<number>(30);
@@ -131,6 +133,18 @@ export default function GiftCreeperApp() {
 
   const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
   const [uploadedScreenshotUrl, setUploadedScreenshotUrl] = useState<string | null>(null);
+
+  // 清空開單表單（恢復為新建模式）
+  const resetOrderForm = () => {
+    setEditingOrderId(null);
+    setSelectedClientId('');
+    setExchangeRate(1.15);
+    setServiceFeePct(30);
+    setShippingFeeRmb(50);
+    setOrderNotes('');
+    setUploadedScreenshotUrl(null);
+    setOrderItems([{ id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
+  };
 
   // 監聽 Ctrl+V / Cmd+V 貼上多張截圖事件
   useEffect(() => {
@@ -157,7 +171,6 @@ export default function GiftCreeperApp() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [activeTab, orderItems]);
 
-  // 點擊選擇多圖
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
@@ -166,7 +179,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  // 拖曳多圖
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -193,14 +205,11 @@ export default function GiftCreeperApp() {
     });
   };
 
-  // 處理多圖批次辨識
   const handleProcessScreenshots = async (files: File[]) => {
     setIsParsingScreenshot(true);
     try {
-      // 1. 轉為 Base64 陣列
       const base64List = await Promise.all(files.map(f => convertFileToBase64(f)));
 
-      // 2. 上傳第一張圖到 Supabase Storage 做範例存檔 (若有需要)
       if (supabase && files[0]) {
         try {
           const fileName = `screenshot-${Date.now()}.png`;
@@ -214,7 +223,6 @@ export default function GiftCreeperApp() {
         }
       }
 
-      // 3. 發送至後端並行辨識
       const res = await fetch('/api/parse-cart-screenshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -289,13 +297,12 @@ export default function GiftCreeperApp() {
     return { subtotalRmb, subtotalHkd, serviceFeeHkd, shippingHkd, grandTotalHkd };
   }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb]);
 
-  const handleCreateOrder = async () => {
+  // 新增或更新訂單
+  const handleSaveOrder = async () => {
     if (!selectedClientId) {
       alert('請先選擇客戶/學校！');
       return;
     }
-
-    const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
 
     const validItems = orderItems.filter(item => item.name.trim() !== '');
     if (validItems.length === 0) {
@@ -303,33 +310,90 @@ export default function GiftCreeperApp() {
       return;
     }
 
-    const newOrderData = {
-      order_no: orderNo,
-      client_id: selectedClientId,
-      exchange_rate: exchangeRate,
-      service_fee_pct: serviceFeePct,
-      shipping_fee_rmb: shippingFeeRmb,
-      items: validItems,
-      subtotal_rmb: calculations.subtotalRmb,
-      grand_total_hkd: calculations.grandTotalHkd,
-      status: 'Quoted' as const,
-      notes: orderNotes,
-      screenshot_url: uploadedScreenshotUrl || null,
-      created_at: new Date().toISOString().split('T')[0]
-    };
+    if (editingOrderId) {
+      // --- 編輯更新邏輯 ---
+      const updateData = {
+        client_id: selectedClientId,
+        exchange_rate: exchangeRate,
+        service_fee_pct: serviceFeePct,
+        shipping_fee_rmb: shippingFeeRmb,
+        items: validItems,
+        subtotal_rmb: calculations.subtotalRmb,
+        grand_total_hkd: calculations.grandTotalHkd,
+        notes: orderNotes,
+        screenshot_url: uploadedScreenshotUrl || null,
+      };
 
-    if (supabase) {
-      const { error } = await supabase.from('orders').insert([newOrderData]);
-      if (!error) {
-        fetchOrders();
-      } else {
-        alert('建立失敗：' + error.message);
-        return;
+      if (supabase) {
+        const { error } = await supabase.from('orders').update(updateData).eq('id', editingOrderId);
+        if (!error) {
+          fetchOrders();
+          alert('訂單修改成功！');
+          resetOrderForm();
+          setActiveTab('orders');
+        } else {
+          alert('修改失敗：' + error.message);
+        }
+      }
+    } else {
+      // --- 新增訂單邏輯 ---
+      const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
+
+      const newOrderData = {
+        order_no: orderNo,
+        client_id: selectedClientId,
+        exchange_rate: exchangeRate,
+        service_fee_pct: serviceFeePct,
+        shipping_fee_rmb: shippingFeeRmb,
+        items: validItems,
+        subtotal_rmb: calculations.subtotalRmb,
+        grand_total_hkd: calculations.grandTotalHkd,
+        status: 'Quoted' as const,
+        notes: orderNotes,
+        screenshot_url: uploadedScreenshotUrl || null,
+        created_at: new Date().toISOString().split('T')[0]
+      };
+
+      if (supabase) {
+        const { error } = await supabase.from('orders').insert([newOrderData]);
+        if (!error) {
+          fetchOrders();
+          alert(`訂單 ${orderNo} 建立成功！`);
+          resetOrderForm();
+          setActiveTab('orders');
+        } else {
+          alert('建立失敗：' + error.message);
+        }
       }
     }
+  };
 
-    alert(`訂單 ${orderNo} 建立成功！`);
-    setActiveTab('orders');
+  // 載入訂單資料並切換至編輯視窗
+  const handleEditOrder = (order: Order) => {
+    setEditingOrderId(order.id);
+    setSelectedClientId(order.client_id);
+    setExchangeRate(order.exchange_rate);
+    setServiceFeePct(order.service_fee_pct);
+    setShippingFeeRmb(order.shipping_fee_rmb);
+    setOrderNotes(order.notes || '');
+    setUploadedScreenshotUrl(order.screenshot_url || null);
+    setOrderItems(order.items && order.items.length > 0 ? order.items : [{ id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
+    setActiveTab('create_order');
+  };
+
+  // 刪除訂單
+  const handleDeleteOrder = async (orderId: string, orderNo: string) => {
+    if (window.confirm(`確定要刪除訂單 ${orderNo} 嗎？此操作無法撤銷。`)) {
+      if (supabase) {
+        const { error } = await supabase.from('orders').delete().eq('id', orderId);
+        if (!error) {
+          setOrders(orders.filter(o => o.id !== orderId));
+          alert('訂單已順利刪除！');
+        } else {
+          alert('刪除失敗：' + error.message);
+        }
+      }
+    }
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
@@ -368,10 +432,10 @@ export default function GiftCreeperApp() {
               <LayoutDashboard className="w-5 h-5" /> 數據總覽
             </button>
             <button
-              onClick={() => setActiveTab('create_order')}
+              onClick={() => { resetOrderForm(); setActiveTab('create_order'); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'create_order' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
-              <FilePlus className="w-5 h-5" /> 建立新訂單
+              <FilePlus className="w-5 h-5" /> {editingOrderId ? '修改訂單中' : '建立新訂單'}
             </button>
             <button
               onClick={() => setActiveTab('orders')}
@@ -405,7 +469,7 @@ export default function GiftCreeperApp() {
                 <h2 className="text-2xl font-bold text-slate-900">儀表板 (Dashboard)</h2>
                 <p className="text-sm text-slate-500">歡迎回來，檢視最新的禮品訂單數據。</p>
               </div>
-              <button onClick={() => setActiveTab('create_order')} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
+              <button onClick={() => { resetOrderForm(); setActiveTab('create_order'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
                 <Plus className="w-4 h-4" /> 開立新單
               </button>
             </header>
@@ -465,14 +529,21 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 2: 建立新訂單 (支援多圖上傳) */}
+        {/* TAB 2: 建立/修改訂單 */}
         {activeTab === 'create_order' && (
           <div className="space-y-6 max-w-5xl mx-auto">
-            <header>
-              <h2 className="text-2xl font-bold text-slate-900">建立新訂單</h2>
+            <header className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-slate-900">
+                {editingOrderId ? '修改訂單資料' : '建立新訂單'}
+              </h2>
+              {editingOrderId && (
+                <button onClick={resetOrderForm} className="text-xs bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded font-medium text-slate-700">
+                  取消編輯 (切換為新建)
+                </button>
+              )}
             </header>
 
-            {/* AI 快捷填單區 (支援多圖選擇 / 拖曳 / 貼上) */}
+            {/* AI 快捷填單區 */}
             <div 
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -612,20 +683,28 @@ export default function GiftCreeperApp() {
                   </div>
                 </div>
 
-                <button onClick={handleCreateOrder} className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold">儲存並建立報價單</button>
+                <button onClick={handleSaveOrder} className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold">
+                  {editingOrderId ? '更新訂單內容' : '儲存並建立報價單'}
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 3: 訂單列表 */}
+        {/* TAB 3: 訂單列表 (包含 修改 與 刪除 功能) */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
             <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
               <table className="w-full text-left text-sm text-slate-600">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
-                  <tr><th className="p-4">訂單編號</th><th className="p-4">客戶學校</th><th className="p-4">金額 (HKD)</th><th className="p-4">狀態</th><th className="p-4 text-center">操作</th></tr>
+                  <tr>
+                    <th className="p-4">訂單編號</th>
+                    <th className="p-4">客戶學校</th>
+                    <th className="p-4">金額 (HKD)</th>
+                    <th className="p-4">狀態</th>
+                    <th className="p-4 text-center">操作</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y">
                   {orders.map(order => (
@@ -643,9 +722,29 @@ export default function GiftCreeperApp() {
                         </select>
                       </td>
                       <td className="p-4 text-center">
-                        <button onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} className="bg-slate-900 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1 mx-auto">
-                          <Printer className="w-3.5 h-3.5" /> 檢視/列印
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} 
+                            className="bg-slate-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-slate-800"
+                            title="檢視/列印"
+                          >
+                            <Printer className="w-3.5 h-3.5" /> 列印
+                          </button>
+                          <button 
+                            onClick={() => handleEditOrder(order)} 
+                            className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-100"
+                            title="修改訂單"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> 編輯
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteOrder(order.id, order.order_no)} 
+                            className="bg-red-50 text-red-600 border border-red-200 px-2 py-1.5 rounded text-xs font-medium flex items-center hover:bg-red-100"
+                            title="刪除訂單"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
