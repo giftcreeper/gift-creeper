@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   LayoutDashboard,
@@ -21,7 +21,8 @@ import {
   ArrowRight,
   Sparkles,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Upload
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -71,6 +72,9 @@ export default function GiftCreeperApp() {
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
+
+  // 用於點擊上傳圖檔的隱藏 input ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Supabase 資料同步 ---
   useEffect(() => {
@@ -125,6 +129,7 @@ export default function GiftCreeperApp() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
     { id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }
   ]);
+
   const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
   const [uploadedScreenshotUrl, setUploadedScreenshotUrl] = useState<string | null>(null);
 
@@ -136,8 +141,7 @@ export default function GiftCreeperApp() {
       const clipboardItems = e.clipboardData?.items;
       if (!clipboardItems) return;
 
-      for (const item of clipboardItems) {
-        if (item.type.startsWith('image/')) {
+      for (const item of clipboardItems) {        if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) {
             await handleProcessScreenshot(file);
@@ -151,6 +155,31 @@ export default function GiftCreeperApp() {
     return () => window.removeEventListener('paste', handlePaste);
   }, [activeTab, orderItems]);
 
+  // 處理點擊檔案選擇器上傳
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      await handleProcessScreenshot(file);
+      // 清空 input 讓重複選相同檔案也能觸發 onChange
+      e.target.value = '';
+    }
+  };
+
+  // 處理拖曳上傳 (Drag & Drop)
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      await handleProcessScreenshot(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   const convertFileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -162,8 +191,7 @@ export default function GiftCreeperApp() {
 
   const handleProcessScreenshot = async (file: File) => {
     setIsParsingScreenshot(true);
-    try {
-      // 1. 上傳至 Supabase Storage (若有設定 Bucket)
+    try {      // 1. 上傳至 Supabase Storage (若有設定 Bucket)
       if (supabase) {
         try {
           const fileName = `screenshot-${Date.now()}.png`;
@@ -185,7 +213,6 @@ export default function GiftCreeperApp() {
         body: JSON.stringify({ imageBase64: base64 }),
       });
 
-      // 檢查 response 是否為 OK (避免將 404 HTML 解析為 JSON)
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(`伺服器回應錯誤 (${res.status}): ${errorText.slice(0, 100)}`);
@@ -207,15 +234,15 @@ export default function GiftCreeperApp() {
           const isFirstRowEmpty = prevItems.length === 1 && !prevItems[0].name.trim();
           return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
         });
+
         alert(`✨ AI 成功辨識出 ${aiRows.length} 項商品並自動填入！`);
       } else {
         alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
     } catch (err: any) {
-      console.error('截圖處理失敗:', err);
-      alert(`❌ 截圖辨識過程發生錯誤：${err.message}`);
-    } finally {
-      setIsParsingScreenshot(false);
+      console.error(err);
+      alert(`❌ 截圖辨識過程發生錯誤：${err.message || '未知錯誤'}`);
+    } finally {      setIsParsingScreenshot(false);
     }
   };
 
@@ -233,7 +260,7 @@ export default function GiftCreeperApp() {
     setOrderItems(prevItems => {
       const updated = prevItems.map(item => item.id === id ? { ...item, [field]: value } : item);
       const isLastItem = prevItems[prevItems.length - 1].id === id;
-      
+
       if (isLastItem && field === 'name' && value.toString().trim() !== '') {
         return [
           ...updated,
@@ -250,7 +277,6 @@ export default function GiftCreeperApp() {
     const serviceFeeHkd = subtotalHkd * (serviceFeePct / 100);
     const shippingHkd = shippingFeeRmb * exchangeRate;
     const grandTotalHkd = Math.round(subtotalHkd + serviceFeeHkd + shippingHkd);
-
     return { subtotalRmb, subtotalHkd, serviceFeeHkd, shippingHkd, grandTotalHkd };
   }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb]);
 
@@ -261,8 +287,8 @@ export default function GiftCreeperApp() {
     }
 
     const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
-    const validItems = orderItems.filter(item => item.name.trim() !== '');
 
+    const validItems = orderItems.filter(item => item.name.trim() !== '');
     if (validItems.length === 0) {
       alert('請至少填寫一個產品項目的品名！');
       return;
@@ -313,7 +339,6 @@ export default function GiftCreeperApp() {
 
   return (
     <div className="flex h-screen bg-slate-100 font-sans text-slate-800">
-      
       {/* 側邊導覽列 */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between print:hidden">
         <div>
@@ -326,7 +351,6 @@ export default function GiftCreeperApp() {
               <p className="text-xs text-slate-400">訂單管理系統</p>
             </div>
           </div>
-
           <nav className="p-4 space-y-1">
             <button
               onClick={() => setActiveTab('dashboard')}
@@ -334,21 +358,18 @@ export default function GiftCreeperApp() {
             >
               <LayoutDashboard className="w-5 h-5" /> 數據總覽
             </button>
-
             <button
               onClick={() => setActiveTab('create_order')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'create_order' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <FilePlus className="w-5 h-5" /> 建立新訂單
             </button>
-
             <button
               onClick={() => setActiveTab('orders')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <ListOrdered className="w-5 h-5" /> 訂單列表
             </button>
-
             <button
               onClick={() => setActiveTab('clients')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'clients' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
@@ -357,7 +378,6 @@ export default function GiftCreeperApp() {
             </button>
           </nav>
         </div>
-
         <div className="p-4 border-t border-slate-800">
           <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 p-3 rounded-lg">
             <span className={`w-2 h-2 rounded-full ${supabase ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
@@ -368,7 +388,6 @@ export default function GiftCreeperApp() {
 
       {/* 主內容區域 */}
       <main className="flex-1 overflow-y-auto p-8">
-
         {/* TAB 1: 數據總覽 */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
@@ -437,20 +456,38 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 2: 建立新訂單 (包含 AI 貼上辨識功能) */}
+        {/* TAB 2: 建立新訂單 (包含 AI 貼上與點擊/拖曳上傳功能) */}
         {activeTab === 'create_order' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             <header>
               <h2 className="text-2xl font-bold text-slate-900">建立新訂單</h2>
             </header>
 
-            {/* AI 截圖貼上提示區域 */}
-            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 rounded-xl p-5 text-center shadow-sm relative overflow-hidden">
+            {/* AI 快捷填單區 (支援 貼上、拖曳、點擊上傳) */}
+            <div 
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors cursor-pointer rounded-xl p-5 text-center shadow-sm relative overflow-hidden group"
+            >
+              {/* 隱藏的 File Input */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload} 
+                accept="image/*" 
+                className="hidden" 
+              />
+
               <div className="flex items-center justify-center gap-2 text-indigo-900 font-bold text-base mb-1">
                 <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
-                AI 快捷填單：直接按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 或 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Cmd + V</kbd> 貼上淘寶購物車截圖
+                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【拖曳 / 點擊此處上傳圖片】
               </div>
-              <p className="text-xs text-indigo-600">Qwen-VL 將自動辨識截圖內的「品名、單價、數量、規格」並直接填入表格。</p>
+
+              <p className="text-xs text-indigo-600 flex items-center justify-center gap-1 mt-1">
+                <Upload className="w-3.5 h-3.5" />
+                點擊選擇電腦上的淘寶購物車圖檔（Qwen-VL 自動辨識品名、單價、數量與規格）
+              </p>
 
               {isParsingScreenshot && (
                 <div className="mt-3 inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-medium animate-bounce shadow">
@@ -460,7 +497,7 @@ export default function GiftCreeperApp() {
               )}
 
               {uploadedScreenshotUrl && (
-                <div className="mt-2 text-xs text-slate-500 flex items-center justify-center gap-1">
+                <div className="mt-2 text-xs text-slate-500 flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
                   已上傳並存檔截圖：<a href={uploadedScreenshotUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">檢視原圖</a>
                 </div>
@@ -552,7 +589,7 @@ export default function GiftCreeperApp() {
               <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg space-y-6 h-fit">
                 <h3 className="font-bold text-lg border-b border-slate-800 pb-3 flex items-center gap-2"><DollarSign className="w-5 h-5 text-indigo-400" /> 費用計算</h3>
                 <div className="space-y-3 text-sm">
-                  <div><label className="text-xs text-slate-400">匯率 (RMB &rarr; HKD)</label><input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 1)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
+                  <div><label className="text-xs text-slate-400">匯率 (RMB → HKD)</label><input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 1)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
                   <div><label className="text-xs text-slate-400">服務費 / 利潤加成 (%)</label><input type="number" value={serviceFeePct} onChange={(e) => setServiceFeePct(parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
                   <div><label className="text-xs text-slate-400">國內運費 (RMB)</label><input type="number" value={shippingFeeRmb} onChange={(e) => setShippingFeeRmb(parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
                 </div>
@@ -713,7 +750,6 @@ export default function GiftCreeperApp() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
