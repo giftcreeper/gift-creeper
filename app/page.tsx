@@ -18,7 +18,10 @@ import {
   TrendingUp,
   Clock,
   PackageCheck,
-  ArrowRight
+  ArrowRight,
+  Sparkles,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -43,6 +46,7 @@ interface OrderItem {
   spec: string;
   unit_cost_rmb: number;
   qty: number;
+  isAiGenerated?: boolean;
 }
 
 interface Order {
@@ -58,6 +62,7 @@ interface Order {
   grand_total_hkd: number;
   status: 'Draft' | 'Quoted' | 'Confirmed' | 'Shipped' | 'Completed';
   notes: string;
+  screenshot_url?: string;
   created_at: string;
 }
 
@@ -111,7 +116,7 @@ export default function GiftCreeperApp() {
     alert('成功新增客戶紀錄！');
   };
 
-  // --- 開單計算 Logic ---
+  // --- 開單與 AI 截圖辨識 Logic ---
   const [selectedClientId, setSelectedClientId] = useState('');
   const [exchangeRate, setExchangeRate] = useState<number>(1.15);
   const [serviceFeePct, setServiceFeePct] = useState<number>(30);
@@ -120,6 +125,89 @@ export default function GiftCreeperApp() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
     { id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }
   ]);
+  const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
+  const [uploadedScreenshotUrl, setUploadedScreenshotUrl] = useState<string | null>(null);
+
+  // 監聽 Ctrl+V / Cmd+V 貼上截圖事件
+  useEffect(() => {
+    if (activeTab !== 'create_order') return;
+
+    const handlePaste = async (e: ClipboardEvent) => {
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
+
+      for (const item of clipboardItems) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            await handleProcessScreenshot(file);
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [activeTab, orderItems]);
+
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  const handleProcessScreenshot = async (file: File) => {
+    setIsParsingScreenshot(true);
+    try {
+      // 1. 上傳至 Supabase Storage (若有設定)
+      if (supabase) {
+        const fileName = `screenshot-${Date.now()}.png`;
+        const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, file);
+        if (storageData) {
+          const { data: { publicUrl } } = supabase.storage.from('order-screenshots').getPublicUrl(fileName);
+          setUploadedScreenshotUrl(publicUrl);
+        }
+      }
+
+      // 2. 轉為 Base64 並發送給 AI API 辨識
+      const base64 = await convertFileToBase64(file);
+      const res = await fetch('/api/parse-cart-screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.items && data.items.length > 0) {
+        const aiRows: OrderItem[] = data.items.map((item: any, idx: number) => ({
+          id: `ai-${Date.now()}-${idx}`,
+          name: item.product_name || '未命名商品',
+          spec: item.spec || '',
+          unit_cost_rmb: Number(item.price) || 0,
+          qty: Number(item.quantity) || 100,
+          isAiGenerated: true
+        }));
+
+        setOrderItems((prevItems) => {
+          const isFirstRowEmpty = prevItems.length === 1 && !prevItems[0].name.trim();
+          return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
+        });
+        alert(`✨ AI 成功辨識出 ${aiRows.length} 項商品並自動填入！`);
+      } else {
+        alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰，或檢查 DASHSCOPE_API_KEY。');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('❌ 截圖辨識過程發生錯誤');
+    } finally {
+      setIsParsingScreenshot(false);
+    }
+  };
 
   const addOrderItem = () => {
     setOrderItems([...orderItems, { id: Date.now().toString(), name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
@@ -136,7 +224,6 @@ export default function GiftCreeperApp() {
       const updated = prevItems.map(item => item.id === id ? { ...item, [field]: value } : item);
       const isLastItem = prevItems[prevItems.length - 1].id === id;
       
-      // 當在最後一列輸入「品名」且內容不為空時，自動擴充下一列
       if (isLastItem && field === 'name' && value.toString().trim() !== '') {
         return [
           ...updated,
@@ -164,8 +251,6 @@ export default function GiftCreeperApp() {
     }
 
     const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
-
-    // 過濾掉未填寫品名的空白列
     const validItems = orderItems.filter(item => item.name.trim() !== '');
 
     if (validItems.length === 0) {
@@ -184,6 +269,7 @@ export default function GiftCreeperApp() {
       grand_total_hkd: calculations.grandTotalHkd,
       status: 'Quoted' as const,
       notes: orderNotes,
+      screenshot_url: uploadedScreenshotUrl || null,
       created_at: new Date().toISOString().split('T')[0]
     };
 
@@ -341,12 +427,35 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 2: 建立新訂單 */}
+        {/* TAB 2: 建立新訂單 (包含 AI 貼上辨識功能) */}
         {activeTab === 'create_order' && (
           <div className="space-y-6 max-w-5xl mx-auto">
             <header>
               <h2 className="text-2xl font-bold text-slate-900">建立新訂單</h2>
             </header>
+
+            {/* AI 截圖貼上提示區域 */}
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 rounded-xl p-5 text-center shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-center gap-2 text-indigo-900 font-bold text-base mb-1">
+                <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
+                AI 快捷填單：直接按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 或 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Cmd + V</kbd> 貼上淘寶購物車截圖
+              </div>
+              <p className="text-xs text-indigo-600">Qwen-VL 將自動辨識截圖內的「品名、單價、數量、規格」並直接填入表格。</p>
+
+              {isParsingScreenshot && (
+                <div className="mt-3 inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-1.5 rounded-full text-xs font-medium animate-bounce shadow">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Qwen-VL 視覺 AI 解析截圖中...
+                </div>
+              )}
+
+              {uploadedScreenshotUrl && (
+                <div className="mt-2 text-xs text-slate-500 flex items-center justify-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5 text-indigo-500" />
+                  已上傳並存檔截圖：<a href={uploadedScreenshotUrl} target="_blank" rel="noreferrer" className="text-indigo-600 underline">檢視原圖</a>
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-2 space-y-6">
@@ -378,9 +487,12 @@ export default function GiftCreeperApp() {
 
                   {/* 項目列表 */}
                   {orderItems.map((item, index) => (
-                    <div key={item.id} className="p-3 bg-slate-50 rounded-lg border space-y-2">
-                      <div className="flex justify-between text-xs text-slate-400 font-semibold">
-                        <span>項目 #{index + 1}</span>
+                    <div key={item.id} className={`p-3 rounded-lg border space-y-2 transition-colors ${item.isAiGenerated ? 'bg-indigo-50/50 border-indigo-200' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="flex justify-between text-xs font-semibold">
+                        <span className={item.isAiGenerated ? 'text-indigo-600 flex items-center gap-1' : 'text-slate-400'}>
+                          {item.isAiGenerated && <Sparkles className="w-3 h-3 inline" />}
+                          項目 #{index + 1} {item.isAiGenerated && '(AI 自動填入)'}
+                        </span>
                         {orderItems.length > 1 && (
                           <button onClick={() => removeOrderItem(item.id)} className="text-red-500 hover:text-red-700">
                             <Trash2 className="w-4 h-4" />

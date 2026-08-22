@@ -1,0 +1,58 @@
+import { NextResponse } from 'next/server';
+
+export async function POST(req: Request) {
+  try {
+    const { imageBase64 } = await req.json();
+
+    if (!imageBase64) {
+      return NextResponse.json({ error: '未提供圖片資料' }, { status: 400 });
+    }
+
+    const apiKey = process.env.DASHSCOPE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: '伺服器未設定 DASHSCOPE_API_KEY 環境變數' }, { status: 500 });
+    }
+
+    // 呼叫 Qwen-VL (DashScope 兼容接口)
+    const response = await fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'qwen-vl-max',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: '請分析這張購物車截圖，精確提取所有商品名稱、單價與數量。嚴格僅輸出合法 JSON，格式如下：{"items":[{"product_name": string, "price": number, "quantity": number, "spec": string}]}'
+              },
+              {
+                type: 'image_url',
+                image_url: { url: imageBase64 }
+              }
+            ]
+          }
+        ],
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'AI 辨識服務回應失敗');
+    }
+
+    const contentText = data.choices[0]?.message?.content;
+    const parsedData = JSON.parse(contentText);
+
+    return NextResponse.json({ success: true, items: parsedData.items || [] });
+  } catch (error: any) {
+    console.error('Qwen-VL 解析錯誤:', error);
+    return NextResponse.json({ error: error.message || '購物車截圖解析失敗' }, { status: 500 });
+  }
+}
