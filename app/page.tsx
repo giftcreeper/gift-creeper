@@ -704,7 +704,7 @@ export default function GiftCreeperApp() {
                   <div className="flex justify-between text-slate-400"><span>貨品小計 (RMB)</span><span className="font-mono">¥ {calculations.subtotalRmb.toFixed(2)}</span></div>
                   <div className="flex justify-between text-slate-400"><span>貨品折合 (HKD)</span><span className="font-mono">HK$ {calculations.subtotalHkd.toFixed(2)}</span></div>
                   <div className="flex justify-between items-baseline pt-2 border-t border-slate-700">
-                    <span className="font-bold">建議報價總額</span>
+                    <span className="font-bold">建議報價單總額</span>
                     <span className="text-2xl font-bold text-emerald-400 font-mono">HK$ {calculations.grandTotalHkd.toLocaleString()}</span>
                   </div>
                 </div>
@@ -822,7 +822,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 (更新 Header 聯絡資訊與 YYYY-MM-DD 日期格式) */}
+        {/* TAB 5: 升級版專業報價單 (重現 Subtotal、服務費及運費明細) */}
         {activeTab === 'print' && selectedOrderForPrint && (
           <div className="space-y-6 max-w-4xl mx-auto">
             {/* 頂部操作按鈕 */}
@@ -843,13 +843,22 @@ export default function GiftCreeperApp() {
               {printPages.map((pageItems, pageIdx) => {
                 const isLastPage = pageIdx === printPages.length - 1;
 
+                // 計算列印的細項金額
+                const rate = selectedOrderForPrint.exchange_rate || 1.15;
+                const servicePct = selectedOrderForPrint.service_fee_pct || 0;
+                const shippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
+
+                const subtotalHkd = selectedOrderForPrint.subtotal_rmb * rate;
+                const serviceFeeHkd = subtotalHkd * (servicePct / 100);
+                const shippingHkd = shippingRmb * rate;
+
                 return (
                   <div 
                     key={pageIdx} 
                     className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 space-y-6 font-sans text-slate-800 relative print:break-after-page"
                     style={{ pageBreakAfter: isLastPage ? 'auto' : 'always' }}
                   >
-                    {/* Header 抬頭：已取消地址與網站，更新電話與 Email */}
+                    {/* Header 抬頭 */}
                     <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
                       <div className="space-y-1">
                         <h1 className="text-2xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
@@ -859,8 +868,8 @@ export default function GiftCreeperApp() {
                         </div>
                       </div>
                       <div className="text-right space-y-2">
-                        <div className="inline-block bg-slate-900 text-white px-3 py-1 rounded text-xs font-bold tracking-widest uppercase">
-                          Quotation 報價單 {printPages.length > 1 && `(${pageIdx + 1}/${printPages.length})`}
+                        <div className="inline-block bg-slate-900 text-white px-4 py-1.5 rounded text-sm font-extrabold tracking-widest uppercase shadow-sm">
+                          QUOTATION 報價單 {printPages.length > 1 && `(${pageIdx + 1}/${printPages.length})`}
                         </div>
                         <div className="text-xs text-slate-600 space-y-0.5 font-mono">
                           <p><span className="text-slate-400">報價單號:</span> <strong className="text-slate-900">{selectedOrderForPrint.order_no}</strong></p>
@@ -873,7 +882,7 @@ export default function GiftCreeperApp() {
                     {/* Client Info 客戶資料欄 */}
                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
                       <div className="space-y-0.5">
-                        <p className="font-bold text-indigo-600 uppercase tracking-wider">Customer / Client 寶號客戶：</p>
+                        <p className="font-bold text-indigo-600 uppercase tracking-wider">Customer / Client 客戶資料：</p>
                         <h2 className="text-base font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
                         {currentPrintClient && (
                           <div className="text-slate-600 space-y-0.5 pt-0.5">
@@ -915,8 +924,14 @@ export default function GiftCreeperApp() {
                               <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                                 <td className="p-2.5 text-center text-slate-400 font-mono">{globalIndex}</td>
                                 <td className="p-2.5">
-                                  <p className="font-bold text-slate-900">{item.name}</p>
-                                  {item.spec && <p className="text-[11px] text-slate-500">{item.spec}</p>}
+                                  <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
+                                    <span>{item.name}</span>
+                                    {item.spec && (
+                                      <span className="font-normal text-slate-500 text-[11px]">
+                                        ({item.spec})
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-2.5 text-center font-mono font-medium">{item.qty}</td>
                                 <td className="p-2.5 text-right font-mono text-slate-600">¥ {item.unit_cost_rmb.toFixed(2)}</td>
@@ -928,11 +943,11 @@ export default function GiftCreeperApp() {
                       </table>
                     </div>
 
-                    {/* 頁尾付款條款與簽署欄 */}
+                    {/* 頁尾付款條款與費用明細（重現 Subtotal、服務費及運費） */}
                     {isLastPage ? (
                       <div className="space-y-6 pt-1">
                         <div className="grid grid-cols-12 gap-4 items-end">
-                          <div className="col-span-7 space-y-1">
+                          <div className="col-span-6 space-y-1">
                             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-0.5">
                               <p className="font-bold text-slate-900 flex items-center gap-1">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 付款條款 (Terms & Conditions)：
@@ -943,14 +958,28 @@ export default function GiftCreeperApp() {
                             </div>
                           </div>
 
-                          <div className="col-span-5 text-right space-y-1">
-                            <div className="flex justify-between text-xs text-slate-500">
-                              <span>貨品折合 (Subtotal):</span>
-                              <span className="font-mono">HK$ {Math.round(selectedOrderForPrint.subtotal_rmb * selectedOrderForPrint.exchange_rate).toLocaleString()}</span>
+                          <div className="col-span-6 text-right space-y-1 text-xs">
+                            <div className="flex justify-between text-slate-500">
+                              <span>貨品折合 (HKD Subtotal):</span>
+                              <span className="font-mono">HK$ {Math.round(subtotalHkd).toLocaleString()}</span>
                             </div>
+                            {servicePct > 0 && (
+                              <div className="flex justify-between text-slate-500">
+                                <span>服務費 / 利潤加成 ({servicePct}%):</span>
+                                <span className="font-mono">HK$ {Math.round(serviceFeeHkd).toLocaleString()}</span>
+                              </div>
+                            )}
+                            {shippingRmb > 0 && (
+                              <div className="flex justify-between text-slate-500">
+                                <span>國內運費 (Freight Fee):</span>
+                                <span className="font-mono">HK$ {Math.round(shippingHkd).toLocaleString()}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between items-center pt-2 border-t-2 border-slate-900">
                               <span className="font-bold text-xs text-slate-900 whitespace-nowrap">總金額 (Grand Total):</span>
-                              <span className="text-lg font-extrabold text-indigo-600 font-mono whitespace-nowrap ml-2">HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}</span>
+                              <span className="text-lg font-extrabold text-indigo-600 font-mono whitespace-nowrap ml-2">
+                                HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         </div>
