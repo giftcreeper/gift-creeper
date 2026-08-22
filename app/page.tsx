@@ -854,9 +854,8 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 (服務費與運費攤算至各項目單價，隱藏獨立費用欄) */}
+        {/* TAB 5: 升級版專業報價單 (已加入新 T&C 條款) */}
         {activeTab === 'print' && selectedOrderForPrint && (() => {
-          // 計算總數量，用於按比例分攤運費
           const totalQuantity = selectedOrderForPrint.items.reduce((sum, item) => sum + item.qty, 0);
           const rate = selectedOrderForPrint.exchange_rate || 1.15;
           const servicePct = selectedOrderForPrint.service_fee_pct || 0;
@@ -947,13 +946,8 @@ export default function GiftCreeperApp() {
 
                   <tbody className="divide-y divide-slate-200 bg-white text-xs">
                     {selectedOrderForPrint.items.map((item, idx) => {
-                      // 1. 每件商品分攤的運費 (RMB)
                       const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
-                      
-                      // 2. 包含服務費(加成)與分攤運費後的商品單價 (HKD)
                       const unitPriceHkd = ((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate;
-                      
-                      // 3. 該項小計 (HKD)
                       const itemHkdTotal = Math.round(unitPriceHkd * item.qty);
 
                       const tradName = convertSimpToTrad(item.name);
@@ -987,23 +981,33 @@ export default function GiftCreeperApp() {
                   <tfoot>
                     <tr>
                       <td colSpan={5} className="pt-6">
-                        {/* 頁尾付款條款、費用計算與電子公司印 */}
+                        {/* 頁尾付款條款、T&C 與簽署欄 */}
                         <div className="space-y-6">
-                          <div className="grid grid-cols-12 gap-4 items-end">
-                            <div className="col-span-6 space-y-1">
-                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-0.5">
+                          <div className="grid grid-cols-12 gap-4 items-start">
+                            {/* 付款條款與新增加的 T&C */}
+                            <div className="col-span-8 space-y-2">
+                              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-[11px] text-slate-600 space-y-1">
                                 <p className="font-bold text-slate-900 flex items-center gap-1">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 付款條款 (Terms & Conditions)：
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> 付款及服務條款 (Terms & Conditions)：
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
                                 {selectedOrderForPrint.notes && <p className="text-indigo-600 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
+                                
+                                {/* 新增加的 T&C 內容 */}
+                                <div className="pt-1.5 border-t border-slate-200 text-[10px] text-slate-500 space-y-1 leading-relaxed">
+                                  <p>1. 上述貨品乃完全根據買方指定之品牌、型號、規格、品質標準及指定供應商進行採購與供貨。</p>
+                                  <p>2. 貨品送達指定地點後，買方須於 3 個工作天內完成外觀及基本功能驗收。如逾期未收到買方之書面異議或修訂要求，即視為該批貨品已完全符合合約要求並完成順利交貨。</p>
+                                  <p>3. 如因海關清關抽查/延誤、第三方物流服務商之運輸延誤、或任何不可抗力因素（包括但不限於惡劣天氣、政策變更）導致送貨延期，本公司概不承擔任何違約金、罰款或相關之間接商業損失。</p>
+                                  <p>4. 因本報價單或相關貨品所引起之任何索賠、損失或法律責任，本公司所承擔之最高累積賠償金額，在任何情況下均以該批次爭議貨品之實際合約總金額為限。</p>
+                                  <p>5. 驗收期滿後，貨品之保養、維修或零件更換，均依據指定供應商之保養條款執行。本公司可協助代為聯絡指定供應商辦理，惟過程中產生之本司行政費、跨境來回運費、關稅或維修費用，須由買方自行承擔。</p>
+                                </div>
                               </div>
                             </div>
 
-                            <div className="col-span-6 text-right space-y-1 text-xs">
-                              {/* 取消顯示服務費與運費列，僅保留最終總金額 */}
-                              <div className="flex justify-between items-center pt-2 border-t-2 border-slate-900">
+                            {/* 總金額顯示區 */}
+                            <div className="col-span-4 text-right space-y-1 text-xs self-start pt-1">
+                              <div className="flex justify-between items-center pb-2 border-b-2 border-slate-900">
                                 <span className="font-bold text-xs text-slate-900 whitespace-nowrap">總金額 (Grand Total):</span>
                                 <span className="text-xl font-extrabold text-indigo-600 font-mono whitespace-nowrap ml-2">
                                   HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}
@@ -1013,7 +1017,7 @@ export default function GiftCreeperApp() {
                           </div>
 
                           {/* 簽署區（含公司印章） */}
-                          <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs text-slate-600">
+                          <div className="grid grid-cols-2 gap-8 pt-4 text-center text-xs text-slate-600">
                             <div className="space-y-6">
                               <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
                               <p className="font-bold text-slate-800">客戶確認簽署及蓋單章<br/><span className="text-slate-400 font-normal text-[10px]">(Customer Accepted & Chopped)</span></p>
