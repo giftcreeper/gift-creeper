@@ -25,7 +25,8 @@ import {
   Loader2,
   Upload,
   CheckCircle2,
-  Languages
+  Languages,
+  Stamp
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -35,7 +36,7 @@ const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-// 簡單輕量簡體轉繁體對照器
+// 簡體轉繁體對照器
 const convertSimpToTrad = (str: string) => {
   if (!str) return '';
   const simp = "包装袋盒伞杯子笔笔记本套装钥匙扣手提袋帆布袋抱枕围巾礼品卡定制印制黑色白色红色蓝色黄色绿色";
@@ -88,11 +89,13 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
   
-  // 公司 Logo URL State (可自訂)
+  // Logo 與 公司印章 URL State
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('');
+  const [companyChopUrl, setCompanyChopUrl] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const chopInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (supabase) {
@@ -101,6 +104,9 @@ export default function GiftCreeperApp() {
     }
     const savedLogo = localStorage.getItem('company_logo_url');
     if (savedLogo) setCompanyLogoUrl(savedLogo);
+
+    const savedChop = localStorage.getItem('company_chop_url');
+    if (savedChop) setCompanyChopUrl(savedChop);
   }, []);
 
   const fetchClients = async () => {
@@ -146,6 +152,22 @@ export default function GiftCreeperApp() {
         const url = reader.result as string;
         setCompanyLogoUrl(url);
         localStorage.setItem('company_logo_url', url);
+        alert('公司 Logo 上傳成功！');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // 上傳電子印章圖片
+  const handleChopUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const url = reader.result as string;
+        setCompanyChopUrl(url);
+        localStorage.setItem('company_chop_url', url);
+        alert('電子公司印章上傳成功！已套用至報價單。');
       };
       reader.readAsDataURL(file);
     }
@@ -155,7 +177,7 @@ export default function GiftCreeperApp() {
   const handlePrintQuotation = () => {
     if (selectedOrderForPrint) {
       const originalTitle = document.title;
-      document.title = selectedOrderForPrint.order_no; // 將網頁標題設為單號，匯出 PDF 時檔案名會自動預設為單號
+      document.title = selectedOrderForPrint.order_no;
       window.print();
       setTimeout(() => { document.title = originalTitle; }, 1000);
     }
@@ -266,8 +288,8 @@ export default function GiftCreeperApp() {
       if (data.success && data.items && data.items.length > 0) {
         const aiRows: OrderItem[] = data.items.map((item: any, idx: number) => ({
           id: `ai-${Date.now()}-${idx}`,
-          name: convertSimpToTrad(item.product_name || '未命名商品'), // 自動簡轉繁
-          spec: convertSimpToTrad(item.spec || ''),                   // 自動簡轉繁
+          name: convertSimpToTrad(item.product_name || '未命名商品'),
+          spec: convertSimpToTrad(item.spec || ''),
           unit_cost_rmb: Number(item.price) || 0,
           qty: Number(item.quantity) || 100,
           isAiGenerated: true
@@ -278,7 +300,7 @@ export default function GiftCreeperApp() {
           return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
         });
 
-        alert(`✨ AI 成功解析 ${files.length} 張圖，並已自動將品名與規格轉換為繁體中文！`);
+        alert(`✨ AI 成功解析 ${files.length} 張圖，並已自動轉換為繁體中文！`);
       } else {
         alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
@@ -480,16 +502,26 @@ export default function GiftCreeperApp() {
             </button>
           </nav>
         </div>
+
+        {/* 左側底部圖檔設定區 */}
         <div className="p-4 border-t border-slate-800 space-y-2">
           <button 
             onClick={() => logoInputRef.current?.click()} 
             className="w-full text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 p-2.5 rounded-lg flex items-center justify-center gap-2"
           >
-            <Upload className="w-3.5 h-3.5 text-indigo-400" /> 設定公司 Logo
+            <Upload className="w-3.5 h-3.5 text-indigo-400" /> 上傳公司 Logo
           </button>
           <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" className="hidden" />
 
-          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 p-2.5 rounded-lg">
+          <button 
+            onClick={() => chopInputRef.current?.click()} 
+            className="w-full text-xs text-slate-300 bg-slate-800 hover:bg-slate-700 p-2.5 rounded-lg flex items-center justify-center gap-2"
+          >
+            <Stamp className="w-3.5 h-3.5 text-red-400" /> 上傳電子公司印章
+          </button>
+          <input type="file" ref={chopInputRef} onChange={handleChopUpload} accept="image/*" className="hidden" />
+
+          <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-800/60 p-2.5 rounded-lg mt-1">
             <span className={`w-2 h-2 rounded-full ${supabase ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
             {supabase ? 'Supabase 已連線' : '未設定 Supabase 金鑰'}
           </div>
@@ -822,7 +854,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 (支援 HTML 列印自動跨頁 Header/客戶欄 重覆 + 自動 PDF 檔名 + 電子公司印) */}
+        {/* TAB 5: 升級版專業報價單 (支援真實印章圖片上傳) */}
         {activeTab === 'print' && selectedOrderForPrint && (
           <div className="space-y-6 max-w-4xl mx-auto">
             {/* 頂部操作按鈕 */}
@@ -841,7 +873,6 @@ export default function GiftCreeperApp() {
             {/* A4 容器 */}
             <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800">
               
-              {/* 使用標準 HTML Table 結構，讓 thead 可以在多頁列印時於新一頁頂部自動重覆顯示 Header 及客戶資料 */}
               <table className="w-full text-left border-collapse">
                 <thead className="print:table-header-group">
                   <tr>
@@ -873,7 +904,7 @@ export default function GiftCreeperApp() {
                         </div>
                       </div>
 
-                      {/* 客戶資料欄 (每頁重覆) */}
+                      {/* 客戶資料欄 */}
                       <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs mt-4">
                         <div className="space-y-0.5">
                           <p className="font-bold text-indigo-600 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
@@ -913,7 +944,6 @@ export default function GiftCreeperApp() {
                       (item.unit_cost_rmb * item.qty) * selectedOrderForPrint.exchange_rate * (1 + selectedOrderForPrint.service_fee_pct / 100)
                     );
 
-                    // 自動繁體轉換呈現
                     const tradName = convertSimpToTrad(item.name);
                     const tradSpec = convertSimpToTrad(item.spec);
 
@@ -981,19 +1011,29 @@ export default function GiftCreeperApp() {
                           </div>
                         </div>
 
-                        {/* 簽署區（含紅色電子公司印章） */}
+                        {/* 簽署區（支援上傳真印章圖片） */}
                         <div className="grid grid-cols-2 gap-8 pt-6 text-center text-xs text-slate-600">
                           <div className="space-y-6">
                             <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
                             <p className="font-bold text-slate-800">客戶確認簽署及蓋單章<br/><span className="text-slate-400 font-normal text-[10px]">(Customer Accepted & Chopped)</span></p>
                           </div>
+                          
                           <div className="space-y-2 relative">
-                            {/* 電的公司印章 (CSS SVG 擬真外框印章) */}
-                            <div className="absolute -top-4 right-12 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
-                              <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
-                              <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
-                              <span className="text-[8px] font-bold">CHOP / SIGN</span>
-                            </div>
+                            {companyChopUrl ? (
+                              /* 已上傳真實公司印章圖片 */
+                              <img 
+                                src={companyChopUrl} 
+                                alt="Company Chop" 
+                                className="absolute -top-6 right-10 h-28 object-contain pointer-events-none select-none opacity-90"
+                              />
+                            ) : (
+                              /* 未上傳印章時顯示模擬印章 */
+                              <div className="absolute -top-4 right-12 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                                <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
+                                <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
+                                <span className="text-[8px] font-bold">CHOP / SIGN</span>
+                              </div>
+                            )}
 
                             <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
                             <p className="font-bold text-slate-800">GIFT CREEPER TRADING CO. 授權簽署<br/><span className="text-slate-400 font-normal text-[10px]">(Authorized Signature & Chop)</span></p>
