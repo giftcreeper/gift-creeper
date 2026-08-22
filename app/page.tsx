@@ -23,7 +23,8 @@ import {
   Sparkles,
   Image as ImageIcon,
   Loader2,
-  Upload
+  Upload,
+  CheckCircle2
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -92,15 +93,22 @@ export default function GiftCreeperApp() {
 
   const fetchOrders = async () => {
     if (!supabase) return;
-    const { data, error } = await supabase.from('orders').select('*, clients(school_name)').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('orders').select('*, clients(school_name, contact_person, phone, email, address)').order('created_at', { ascending: false });
     if (!error && data) {
       const formatted = data.map((item: any) => ({
         ...item,
-        client_name: item.clients?.school_name || '未指定學校'
+        client_name: item.clients?.school_name || '未指定學校',
+        client_info: item.clients || null
       }));
       setOrders(formatted);
     }
   };
+
+  // 取得目前選取列印訂單的完整客戶資料
+  const currentPrintClient = useMemo(() => {
+    if (!selectedOrderForPrint) return null;
+    return clients.find(c => c.id === selectedOrderForPrint.client_id) || (selectedOrderForPrint as any).client_info || null;
+  }, [selectedOrderForPrint, clients]);
 
   // --- 客戶管理表單 ---
   const [newClient, setNewClient] = useState({ school_name: '', contact_person: '', phone: '', email: '', address: '' });
@@ -134,7 +142,6 @@ export default function GiftCreeperApp() {
   const [isParsingScreenshot, setIsParsingScreenshot] = useState(false);
   const [uploadedScreenshotUrl, setUploadedScreenshotUrl] = useState<string | null>(null);
 
-  // 清空開單表單（恢復為新建模式）
   const resetOrderForm = () => {
     setEditingOrderId(null);
     setSelectedClientId('');
@@ -146,7 +153,7 @@ export default function GiftCreeperApp() {
     setOrderItems([{ id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
   };
 
-  // 監聽 Ctrl+V / Cmd+V 貼上多張截圖事件
+  // 監聽 Ctrl+V / Cmd+V 貼上截圖事件
   useEffect(() => {
     if (activeTab !== 'create_order') return;
 
@@ -297,7 +304,6 @@ export default function GiftCreeperApp() {
     return { subtotalRmb, subtotalHkd, serviceFeeHkd, shippingHkd, grandTotalHkd };
   }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb]);
 
-  // 新增或更新訂單
   const handleSaveOrder = async () => {
     if (!selectedClientId) {
       alert('請先選擇客戶/學校！');
@@ -311,7 +317,6 @@ export default function GiftCreeperApp() {
     }
 
     if (editingOrderId) {
-      // --- 編輯更新邏輯 ---
       const updateData = {
         client_id: selectedClientId,
         exchange_rate: exchangeRate,
@@ -336,7 +341,6 @@ export default function GiftCreeperApp() {
         }
       }
     } else {
-      // --- 新增訂單邏輯 ---
       const orderNo = `GC-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`;
 
       const newOrderData = {
@@ -368,7 +372,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  // 載入訂單資料並切換至編輯視窗
   const handleEditOrder = (order: Order) => {
     setEditingOrderId(order.id);
     setSelectedClientId(order.client_id);
@@ -381,7 +384,6 @@ export default function GiftCreeperApp() {
     setActiveTab('create_order');
   };
 
-  // 刪除訂單
   const handleDeleteOrder = async (orderId: string, orderNo: string) => {
     if (window.confirm(`確定要刪除訂單 ${orderNo} 嗎？此操作無法撤銷。`)) {
       if (supabase) {
@@ -460,7 +462,7 @@ export default function GiftCreeperApp() {
       </aside>
 
       {/* 主內容區域 */}
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible print:bg-white">
         {/* TAB 1: 數據總覽 */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
@@ -691,7 +693,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 3: 訂單列表 (包含 修改 與 刪除 功能) */}
+        {/* TAB 3: 訂單列表 */}
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
@@ -796,64 +798,161 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 列印報價單 */}
+        {/* TAB 5: 升級版專業報價單 (Pro Quotation Layout) */}
         {activeTab === 'print' && selectedOrderForPrint && (
           <div className="space-y-6 max-w-4xl mx-auto">
-            <div className="flex justify-between items-center print:hidden">
-              <button onClick={() => setActiveTab('orders')} className="text-xs text-slate-500">← 返回訂單列表</button>
-              <button onClick={() => window.print()} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md">
-                <Printer className="w-4 h-4" /> 列印 / 下載 PDF
+            {/* 頂部操作按鈕 (列印時會被自動隱藏) */}
+            <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
+              <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
+                ← 返回訂單列表
+              </button>
+              <button 
+                onClick={() => window.print()} 
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-all transform hover:scale-105"
+              >
+                <Printer className="w-4 h-4" /> 列印 / 下載專業 PDF
               </button>
             </div>
 
-            <div className="bg-white p-10 rounded-xl border border-slate-300 shadow-md print:shadow-none print:border-none print:p-0 space-y-8">
-              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6">
-                <div>
+            {/* 正式報價單 A4 版面 */}
+            <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 space-y-8 font-sans text-slate-800 relative">
+              {/* 頂部質感色條 */}
+              <div className="h-2 bg-indigo-600 w-full rounded-t-2xl absolute top-0 left-0 print:hidden"></div>
+
+              {/* Header 抬頭：公司資訊與 QUOTATION */}
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 pt-2">
+                <div className="space-y-1">
                   <h1 className="text-3xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
-                  <p className="text-xs text-slate-500 mt-1">禮品服務公司 | Gift Creeper Limited</p>
-                </div>
-                <div className="text-right">
-                  <h2 className="text-2xl font-bold text-indigo-600">QUOTATION 報價單</h2>
-                  <p className="text-xs font-mono mt-1">單號: {selectedOrderForPrint.order_no}</p>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <p className="text-xs text-slate-400 font-bold mb-1">TO:</p>
-                <h3 className="font-bold text-slate-900 text-lg">{selectedOrderForPrint.client_name}</h3>
-              </div>
-
-              <table className="w-full text-left text-sm border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-slate-800 bg-slate-100">
-                    <th className="p-3">#</th>
-                    <th className="p-3">項目與規格</th>
-                    <th className="p-3 text-right">數量</th>
-                    <th className="p-3 text-right">小計 (HKD)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {selectedOrderForPrint.items.map((item, idx) => {
-                    const itemHkdTotal = (item.unit_cost_rmb * item.qty) * selectedOrderForPrint.exchange_rate * (1 + selectedOrderForPrint.service_fee_pct / 100);
-                    return (
-                      <tr key={idx}>
-                        <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
-                        <td className="p-3"><p className="font-bold">{item.name}</p><p className="text-xs text-slate-500">{item.spec}</p></td>
-                        <td className="p-3 text-right font-mono">{item.qty}</td>
-                        <td className="p-3 text-right font-mono font-semibold">HK$ {itemHkdTotal.toFixed(0)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-              <div className="flex justify-end pt-4 border-t-2 border-slate-800">
-                <div className="w-64 text-right">
-                  <div className="flex justify-between text-base font-bold text-slate-900">
-                    <span>總金額 (Grand Total):</span>
-                    <span className="text-indigo-600 font-mono">HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}</span>
+                  <p className="text-sm font-semibold text-indigo-600">禮品爬蟲服務有限公司 | Gift Creeper Limited</p>
+                  <div className="text-xs text-slate-500 space-y-0.5 pt-2">
+                    <p>📍 香港新界葵涌貨櫃碼頭路71-75號鍾意寶工業大廈</p>
+                    <p>📞 電話: +852 2345 6789 | ✉️ 電郵: info@giftcreeper.com</p>
+                    <p>🌐 網頁: www.giftcreeper.com</p>
                   </div>
                 </div>
+                <div className="text-right space-y-2">
+                  <div className="inline-block bg-slate-900 text-white px-4 py-1.5 rounded text-sm font-bold tracking-widest uppercase">
+                    Quotation 報價單
+                  </div>
+                  <div className="text-xs text-slate-600 space-y-1 pt-1 font-mono">
+                    <p><span className="text-slate-400">報價單號:</span> <strong className="text-slate-900">{selectedOrderForPrint.order_no}</strong></p>
+                    <p><span className="text-slate-400">發單日期:</span> {selectedOrderForPrint.created_at || new Date().toISOString().split('T')[0]}</p>
+                    <p><span className="text-slate-400">有效期至:</span> 30 天內有效</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Client Info 雙欄資訊欄 */}
+              <div className="grid grid-cols-2 gap-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div className="space-y-1">
+                  <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Customer / Client 寶號客戶：</p>
+                  <h2 className="text-xl font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
+                  {currentPrintClient && (
+                    <div className="text-xs text-slate-600 space-y-1 pt-1">
+                      {currentPrintClient.contact_person && <p>聯絡對象: <strong>{currentPrintClient.contact_person}</strong></p>}
+                      {currentPrintClient.phone && <p>聯絡電話: {currentPrintClient.phone}</p>}
+                      {currentPrintClient.email && <p>電子郵件: {currentPrintClient.email}</p>}
+                      {currentPrintClient.address && <p>送貨地址: {currentPrintClient.address}</p>}
+                    </div>
+                  )}
+                </div>
+                <div className="text-right flex flex-col justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Payment Status 狀態：</p>
+                    <span className="inline-block mt-1 px-3 py-1 bg-amber-100 text-amber-800 text-xs font-bold rounded-full border border-amber-300">
+                      {selectedOrderForPrint.status === 'Quoted' ? '待確認報價 (Quoted)' : selectedOrderForPrint.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">如有查詢，請引述上述報價單號。</p>
+                </div>
+              </div>
+
+              {/* 明細表格 Table */}
+              <div className="overflow-hidden rounded-xl border border-slate-300">
+                <table className="w-full text-left text-sm border-collapse">
+                  <thead>
+                    <tr className="bg-slate-900 text-white text-xs uppercase tracking-wider">
+                      <th className="p-3.5 w-12 text-center">#</th>
+                      <th className="p-3.5">產品名稱與規格說明 (Item & Specifications)</th>
+                      <th className="p-3.5 text-center w-20">數量</th>
+                      <th className="p-3.5 text-right w-28">單價 (RMB)</th>
+                      <th className="p-3.5 text-right w-32">小計 (HKD)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {selectedOrderForPrint.items.map((item, idx) => {
+                      // 計算每個項目的港幣折算總額
+                      const itemHkdTotal = Math.round(
+                        (item.unit_cost_rmb * item.qty) * selectedOrderForPrint.exchange_rate * (1 + selectedOrderForPrint.service_fee_pct / 100)
+                      );
+                      const unitHkdPrice = item.qty > 0 ? (itemHkdTotal / item.qty).toFixed(1) : '0';
+
+                      return (
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                          <td className="p-3.5 text-center text-slate-400 font-mono text-xs">{idx + 1}</td>
+                          <td className="p-3.5">
+                            <p className="font-bold text-slate-900">{item.name}</p>
+                            {item.spec && <p className="text-xs text-slate-500 mt-0.5">{item.spec}</p>}
+                          </td>
+                          <td className="p-3.5 text-center font-mono font-medium">{item.qty}</td>
+                          <td className="p-3.5 text-right font-mono text-slate-600">¥ {item.unit_cost_rmb.toFixed(2)}</td>
+                          <td className="p-3.5 text-right font-mono font-bold text-slate-900">HK$ {itemHkdTotal.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 金額統計 Summary & Notes */}
+              <div className="grid grid-cols-12 gap-6 pt-2">
+                <div className="col-span-7 space-y-3">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs space-y-1.5 text-slate-600">
+                    <p className="font-bold text-slate-900 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" /> 付款條款與說明 (Terms & Conditions)：
+                    </p>
+                    <ul className="list-disc list-inside space-y-0.5 text-slate-500 pl-1">
+                      <li>確認訂單後請先支付 50% 訂金，餘款於交貨前結清。</li>
+                      <li>支票抬頭請寫：<strong>Gift Creeper Limited</strong></li>
+                      <li>銀行轉帳：匯豐銀行 123-456789-001</li>
+                      {selectedOrderForPrint.notes && <li className="text-indigo-600 font-medium">備註：{selectedOrderForPrint.notes}</li>}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="col-span-5 space-y-2 text-right text-sm">
+                  <div className="flex justify-between py-1 text-slate-500">
+                    <span>貨品折合 (HKD Subtotal):</span>
+                    <span className="font-mono">HK$ {Math.round(selectedOrderForPrint.subtotal_rmb * selectedOrderForPrint.exchange_rate).toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between py-1 text-slate-500">
+                    <span>運費及服務費加成 ({selectedOrderForPrint.service_fee_pct}%):</span>
+                    <span className="font-mono">包含在內</span>
+                  </div>
+                  <div className="flex justify-between items-baseline pt-3 border-t-2 border-slate-900">
+                    <span className="font-bold text-base text-slate-900">總金額 (Grand Total):</span>
+                    <span className="text-2xl font-extrabold text-indigo-600 font-mono">HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 簽署與蓋章區 (Signatures) */}
+              <div className="grid grid-cols-2 gap-12 pt-12 text-center text-xs text-slate-600">
+                <div className="space-y-8">
+                  <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
+                  <p className="font-bold text-slate-800">客戶確認簽署及蓋單章<br/><span className="text-slate-400 font-normal">(Customer Accepted & Chopped)</span></p>
+                </div>
+                <div className="space-y-8">
+                  <div className="border-b border-slate-400 h-12 w-3/4 mx-auto flex items-end justify-center pb-1">
+                    <span className="font-serif italic text-slate-400 text-sm">Gift Creeper Ltd.</span>
+                  </div>
+                  <p className="font-bold text-slate-800">Gift Creeper Limited 授權簽署<br/><span className="text-slate-400 font-normal">(Authorized Signature & Chop)</span></p>
+                </div>
+              </div>
+
+              {/* 頁尾感謝語 */}
+              <div className="text-center text-xs text-slate-400 pt-6 border-t border-slate-200">
+                Thank you for your business! 多謝惠顧，期待再次為您服務。
               </div>
             </div>
           </div>
