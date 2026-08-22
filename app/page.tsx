@@ -163,13 +163,17 @@ export default function GiftCreeperApp() {
   const handleProcessScreenshot = async (file: File) => {
     setIsParsingScreenshot(true);
     try {
-      // 1. 上傳至 Supabase Storage (若有設定)
+      // 1. 上傳至 Supabase Storage (若有設定 Bucket)
       if (supabase) {
-        const fileName = `screenshot-${Date.now()}.png`;
-        const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, file);
-        if (storageData) {
-          const { data: { publicUrl } } = supabase.storage.from('order-screenshots').getPublicUrl(fileName);
-          setUploadedScreenshotUrl(publicUrl);
+        try {
+          const fileName = `screenshot-${Date.now()}.png`;
+          const { data: storageData } = await supabase.storage.from('order-screenshots').upload(fileName, file);
+          if (storageData) {
+            const { data: { publicUrl } } = supabase.storage.from('order-screenshots').getPublicUrl(fileName);
+            setUploadedScreenshotUrl(publicUrl);
+          }
+        } catch (storageErr) {
+          console.warn('Supabase Storage 上傳失敗 (可忽略):', storageErr);
         }
       }
 
@@ -180,6 +184,12 @@ export default function GiftCreeperApp() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64 }),
       });
+
+      // 檢查 response 是否為 OK (避免將 404 HTML 解析為 JSON)
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`伺服器回應錯誤 (${res.status}): ${errorText.slice(0, 100)}`);
+      }
 
       const data = await res.json();
 
@@ -199,11 +209,11 @@ export default function GiftCreeperApp() {
         });
         alert(`✨ AI 成功辨識出 ${aiRows.length} 項商品並自動填入！`);
       } else {
-        alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰，或檢查 DASHSCOPE_API_KEY。');
+        alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
-    } catch (err) {
-      console.error(err);
-      alert('❌ 截圖辨識過程發生錯誤');
+    } catch (err: any) {
+      console.error('截圖處理失敗:', err);
+      alert(`❌ 截圖辨識過程發生錯誤：${err.message}`);
     } finally {
       setIsParsingScreenshot(false);
     }
