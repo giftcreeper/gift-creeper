@@ -316,7 +316,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  // 採用 OpenCC 進行精準繁體手動轉換
   const handleManualTranslateAll = () => {
     const updated = orderItems.map(item => ({
       ...item,
@@ -1013,16 +1012,18 @@ export default function GiftCreeperApp() {
                               </div>
                             </div>
 
-                            <div className="w-1/3 text-right space-y-1 text-xs self-start pt-1">
-                              <div className="flex justify-between items-center pb-2 border-b-2 border-slate-900">
-                                <span className="font-bold text-xs text-slate-900 whitespace-nowrap">總金額 (Grand Total):</span>
-                                <span className="text-xl font-extrabold text-indigo-600 font-mono whitespace-nowrap ml-2">
+                            {/* 優化總金額顯示區：使用 flex 彈性與適應性字型避免超出邊界 */}
+                            <div className="flex-1 text-right space-y-1 text-xs self-start pt-1 pl-2">
+                              <div className="flex justify-end items-baseline gap-1 pb-2 border-b-2 border-slate-900 whitespace-nowrap">
+                                <span className="font-bold text-xs text-slate-900 shrink-0">總金額 (Grand Total):</span>
+                                <span className="text-lg sm:text-xl font-extrabold text-indigo-600 font-mono tracking-tight shrink-0">
                                   HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}
                                 </span>
                               </div>
                             </div>
                           </div>
 
+                          {/* 簽署區（印章位置調整至右側邊緣 right-2） */}
                           <div className="grid grid-cols-2 gap-8 pt-4 text-center text-xs text-slate-600">
                             <div className="space-y-6">
                               <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
@@ -1034,10 +1035,10 @@ export default function GiftCreeperApp() {
                                 <img 
                                   src={companyChopUrl} 
                                   alt="Company Chop" 
-                                  className="absolute -top-6 right-10 h-28 object-contain pointer-events-none select-none opacity-90"
+                                  className="absolute -top-6 right-2 h-28 object-contain pointer-events-none select-none opacity-90"
                                 />
                               ) : (
-                                <div className="absolute -top-4 right-12 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                                <div className="absolute -top-4 right-4 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
                                   <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
                                   <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
                                   <span className="text-[8px] font-bold">CHOP / SIGN</span>
