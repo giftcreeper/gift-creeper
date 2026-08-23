@@ -76,6 +76,22 @@ interface Order {
   created_at: string;
 }
 
+// 輔助函式：根據訂單明細精確計算四捨五入後的整數總金額
+const computeOrderGrandTotal = (order: Order): number => {
+  if (!order.items || order.items.length === 0) return order.grand_total_hkd || 0;
+
+  const totalQty = order.items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+  const rate = order.exchange_rate || 1.15;
+  const servicePct = order.service_fee_pct || 0;
+  const totalShippingRmb = order.shipping_fee_rmb || 0;
+
+  return order.items.reduce((sum, item) => {
+    const shippingPerPieceRmb = totalQty > 0 ? totalShippingRmb / totalQty : 0;
+    const unitPriceHkd = Math.round(((Number(item.unit_cost_rmb) * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
+    return sum + (unitPriceHkd * (Number(item.qty) || 0));
+  }, 0);
+};
+
 export default function GiftCreeperApp() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'create_order' | 'orders' | 'print'>('dashboard');
   const [clients, setClients] = useState<Client[]>([]);
@@ -115,11 +131,16 @@ export default function GiftCreeperApp() {
     if (!supabase) return;
     const { data, error } = await supabase.from('orders').select('*, clients(school_name, contact_person, phone, email, address)').order('created_at', { ascending: false });
     if (!error && data) {
-      const formatted = data.map((item: any) => ({
-        ...item,
-        client_name: item.clients?.school_name || '未指定學校',
-        client_info: item.clients || null
-      }));
+      const formatted = data.map((item: any) => {
+        const orderObj: Order = {
+          ...item,
+          client_name: item.clients?.school_name || '未指定學校',
+          client_info: item.clients || null
+        };
+        // 即時重算並覆蓋為精確四捨五入整數額
+        orderObj.grand_total_hkd = computeOrderGrandTotal(orderObj);
+        return orderObj;
+      });
       setOrders(formatted);
     }
   };
@@ -474,7 +495,7 @@ export default function GiftCreeperApp() {
   };
 
   const stats = useMemo(() => {
-    const totalSales = orders.reduce((acc, o) => acc + o.grand_total_hkd, 0);
+    const totalSales = orders.reduce((acc, o) => acc + (o.grand_total_hkd || 0), 0);
     const pendingOrders = orders.filter(o => o.status === 'Quoted' || o.status === 'Confirmed').length;
     const completedOrders = orders.filter(o => o.status === 'Completed').length;
     return { totalSales, pendingOrders, completedOrders, totalClients: clients.length };
@@ -933,11 +954,7 @@ export default function GiftCreeperApp() {
           const totalShippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
 
           // 四捨五入計算報價單總額
-          const computedGrandTotal = selectedOrderForPrint.items.reduce((sum, item) => {
-            const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
-            const unitPriceHkd = Math.round(((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
-            return sum + (unitPriceHkd * item.qty);
-          }, 0);
+          const computedGrandTotal = computeOrderGrandTotal(selectedOrderForPrint);
 
           return (
             <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
