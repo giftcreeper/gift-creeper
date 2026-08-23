@@ -471,13 +471,22 @@ export default function GiftCreeperApp() {
   }, [orders, clients]);
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
-      {/* 注入列印時保留背景圖與背景顏色的 CSS */}
+    <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden print:h-auto print:overflow-visible">
+      {/* 修正列印問題：全域解鎖高度與 overflow，並保留背景底色 */}
       <style jsx global>{`
         @media print {
+          html, body, #__next, main, div {
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
+          }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
+          }
+          @page {
+            size: A4;
+            margin: 10mm;
           }
         }
       `}</style>
@@ -914,7 +923,7 @@ export default function GiftCreeperApp() {
           const totalShippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
 
           return (
-            <div className="space-y-6 max-w-4xl mx-auto">
+            <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
               <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
                 <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
                   ← 返回列表
@@ -928,8 +937,8 @@ export default function GiftCreeperApp() {
               </div>
 
               {/* A4 容器 */}
-              <div className="bg-white p-5 md:p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800 overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[500px]">
+              <div className="bg-white p-5 md:p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800 overflow-x-auto print:overflow-visible">
+                <table className="w-full text-left border-collapse min-w-[500px] print:min-w-full">
                   <thead className="print:table-header-group">
                     <tr>
                       <td colSpan={5} className="pb-4">
