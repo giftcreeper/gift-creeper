@@ -30,7 +30,8 @@ import {
   Menu,
   X,
   CreditCard,
-  Tag
+  Tag,
+  FileText
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -105,6 +106,9 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
   
+  // 列印文件類型選擇：'quotation' 或 'invoice'
+  const [printDocType, setPrintDocType] = useState<'quotation' | 'invoice'>('quotation');
+
   // 手機版選單開關 State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -206,7 +210,8 @@ export default function GiftCreeperApp() {
   const handlePrintQuotation = () => {
     if (selectedOrderForPrint) {
       const originalTitle = document.title;
-      document.title = selectedOrderForPrint.order_no;
+      const prefix = printDocType === 'invoice' ? 'INV-' : 'QT-';
+      document.title = `${prefix}${selectedOrderForPrint.order_no}`;
       window.print();
       setTimeout(() => { document.title = originalTitle; }, 1000);
     }
@@ -892,7 +897,7 @@ export default function GiftCreeperApp() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
             <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600 min-w-[650px]">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[700px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
                   <tr>
                     <th className="p-4">訂單編號</th>
@@ -906,6 +911,8 @@ export default function GiftCreeperApp() {
                 <tbody className="divide-y">
                   {orders.map(order => {
                     const requiresDeposit = order.grand_total_hkd > 3500;
+                    const isConfirmed = ['Confirmed', 'Shipped', 'Completed'].includes(order.status);
+                    
                     return (
                       <tr key={order.id} className="hover:bg-slate-50">
                         <td className="p-4 font-mono font-bold text-slate-900">{order.order_no}</td>
@@ -932,24 +939,35 @@ export default function GiftCreeperApp() {
                           </select>
                         </td>
                         <td className="p-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             <button 
-                              onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} 
-                              className="bg-indigo-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-800"
-                              title="檢視/列印"
+                              onClick={() => { setSelectedOrderForPrint(order); setPrintDocType('quotation'); setActiveTab('print'); }} 
+                              className="bg-indigo-900 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-800"
+                              title="檢視/列印報價單"
                             >
-                              <Printer className="w-3.5 h-3.5" /> 列印
+                              <Printer className="w-3.5 h-3.5" /> 報價單
                             </button>
+
+                            {isConfirmed && (
+                              <button 
+                                onClick={() => { setSelectedOrderForPrint(order); setPrintDocType('invoice'); setActiveTab('print'); }} 
+                                className="bg-emerald-700 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1 hover:bg-emerald-600 shadow-sm"
+                                title="檢視/列印 Invoice"
+                              >
+                                <FileText className="w-3.5 h-3.5" /> Invoice
+                              </button>
+                            )}
+
                             <button 
                               onClick={() => handleEditOrder(order)} 
-                              className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-100"
+                              className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-1 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-100"
                               title="修改訂單"
                             >
-                              <Edit className="w-3.5 h-3.5" /> 編輯
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
                             <button 
                               onClick={() => handleDeleteOrder(order.id, order.order_no)} 
-                              className="bg-red-50 text-red-600 border border-red-200 px-2 py-1.5 rounded text-xs font-medium flex items-center hover:bg-red-100"
+                              className="bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded text-xs font-medium flex items-center hover:bg-red-100"
                               title="刪除訂單"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1007,7 +1025,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 */}
+        {/* TAB 5: 升級版專業報價單 / INVOICE */}
         {activeTab === 'print' && selectedOrderForPrint && (() => {
           const totalQuantity = selectedOrderForPrint.items.reduce((sum, item) => sum + item.qty, 0);
           const rate = selectedOrderForPrint.exchange_rate || 1.15;
@@ -1015,7 +1033,7 @@ export default function GiftCreeperApp() {
           const totalShippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
           const discountHkdVal = Number(selectedOrderForPrint.discount_hkd) || 0;
 
-          // 四捨五入計算報價單總額
+          // 四捨五入計算總額
           const computedGrandTotal = computeOrderGrandTotal(selectedOrderForPrint);
           
           // 判定是否需收取 50% 訂金（超過 HK$3,500）
@@ -1025,17 +1043,69 @@ export default function GiftCreeperApp() {
 
           const discountPerPieceHkd = totalQuantity > 0 ? discountHkdVal / totalQuantity : 0;
 
+          // 是否可以切換成 Invoice 模式 (Confirmed, Shipped, Completed)
+          const canShowInvoice = ['Confirmed', 'Shipped', 'Completed'].includes(selectedOrderForPrint.status);
+          const isInvoice = printDocType === 'invoice' && canShowInvoice;
+
+          // 色調動態設定
+          const theme = isInvoice ? {
+            primaryBg: 'bg-emerald-900',
+            primaryText: 'text-emerald-950',
+            primarySubText: 'text-emerald-700',
+            badgeBg: 'bg-emerald-800',
+            borderTheme: 'border-emerald-800',
+            boxBg: 'bg-emerald-50/60',
+            boxBorder: 'border-emerald-200',
+            grandTotalText: 'text-emerald-900',
+            btnBg: 'bg-emerald-800 hover:bg-emerald-700',
+            docTitle: 'INVOICE 發票',
+            docNoPrefix: 'INV-'
+          } : {
+            primaryBg: 'bg-indigo-950',
+            primaryText: 'text-indigo-950',
+            primarySubText: 'text-indigo-700',
+            badgeBg: 'bg-indigo-900',
+            borderTheme: 'border-indigo-900',
+            boxBg: 'bg-indigo-50/50',
+            boxBorder: 'border-indigo-100',
+            grandTotalText: 'text-indigo-900',
+            btnBg: 'bg-indigo-900 hover:bg-indigo-800',
+            docTitle: 'QUOTATION 報價單',
+            docNoPrefix: 'QT-'
+          };
+
           return (
             <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
-              <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
-                <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
-                  ← 返回列表
-                </button>
+              <div className="flex flex-col sm:flex-row justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner gap-3">
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
+                    ← 返回列表
+                  </button>
+
+                  {/* 切換 Quotation / Invoice 按鈕選單 */}
+                  {canShowInvoice && (
+                    <div className="bg-slate-300 p-1 rounded-lg flex gap-1">
+                      <button 
+                        onClick={() => setPrintDocType('quotation')}
+                        className={`px-3 py-1 rounded text-xs font-bold transition-all ${!isInvoice ? 'bg-indigo-900 text-white shadow' : 'text-slate-700 hover:bg-slate-400'}`}
+                      >
+                        報價單 (Quotation)
+                      </button>
+                      <button 
+                        onClick={() => setPrintDocType('invoice')}
+                        className={`px-3 py-1 rounded text-xs font-bold transition-all ${isInvoice ? 'bg-emerald-800 text-white shadow' : 'text-slate-700 hover:bg-slate-400'}`}
+                      >
+                        發票 (Invoice)
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button 
                   onClick={handlePrintQuotation} 
-                  className="bg-indigo-900 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md"
+                  className={`${theme.btnBg} text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-colors`}
                 >
-                  <Printer className="w-4 h-4" /> 列印 / 下載 PDF
+                  <Printer className="w-4 h-4" /> 列印 / 下載 {isInvoice ? 'Invoice PDF' : '報價單 PDF'}
                 </button>
               </div>
 
@@ -1045,35 +1115,35 @@ export default function GiftCreeperApp() {
                   <thead className="print:table-header-group">
                     <tr>
                       <td colSpan={5} className="pb-4">
-                        <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-indigo-900 pb-4 gap-4">
+                        <div className={`flex flex-col sm:flex-row justify-between items-start border-b-2 ${theme.borderTheme} pb-4 gap-4`}>
                           <div className="flex items-center gap-4">
                             {companyLogoUrl ? (
                               <img src={companyLogoUrl} alt="Company Logo" className="h-12 md:h-14 object-contain max-w-[140px] md:max-w-[160px]" />
                             ) : (
-                              <div className="w-10 h-10 md:w-12 md:h-12 bg-indigo-900 text-white font-black text-xl rounded-xl flex items-center justify-center shadow">
+                              <div className={`w-10 h-10 md:w-12 md:h-12 ${theme.badgeBg} text-white font-black text-xl rounded-xl flex items-center justify-center shadow`}>
                                 GC
                               </div>
                             )}
                             <div>
-                              <h1 className="text-xl md:text-2xl font-black text-indigo-950 tracking-wider">GIFT CREEPER</h1>
-                              <p className="text-xs font-bold text-indigo-700">博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
+                              <h1 className={`text-xl md:text-2xl font-black ${theme.primaryText} tracking-wider`}>GIFT CREEPER</h1>
+                              <p className={`text-xs font-bold ${theme.primarySubText}`}>博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
                               <p className="text-[11px] text-slate-500 pt-0.5">📞 電話: +852 4624 0018 | ✉️ 電郵: GIFTCREEPER@GMAIL.COM</p>
                             </div>
                           </div>
                           <div className="text-left sm:text-right space-y-1">
-                            <div className="inline-block bg-indigo-900 text-white px-3.5 py-1 rounded text-xs font-extrabold tracking-widest uppercase shadow-sm">
-                              QUOTATION 報價單
+                            <div className={`inline-block ${theme.badgeBg} text-white px-3.5 py-1 rounded text-xs font-extrabold tracking-widest uppercase shadow-sm`}>
+                              {theme.docTitle}
                             </div>
                             <div className="text-xs text-slate-600 space-y-0.5 font-mono pt-1">
-                              <p><span className="text-slate-400">報價單號:</span> <strong className="text-indigo-950">{selectedOrderForPrint.order_no}</strong></p>
+                              <p><span className="text-slate-400">{isInvoice ? '發票號碼:' : '報價單號:'}</span> <strong className={theme.primaryText}>{theme.docNoPrefix}{selectedOrderForPrint.order_no}</strong></p>
                               <p><span className="text-slate-400">發單日期:</span> {formatDateYYYYMMDD(selectedOrderForPrint.created_at)}</p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-indigo-50/50 p-3.5 rounded-r-xl border-l-4 border-indigo-900 border-t border-b border-r border-indigo-100 text-xs mt-4">
+                        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${theme.boxBg} p-3.5 rounded-r-xl border-l-4 ${theme.borderTheme} border-t border-b border-r ${theme.boxBorder} text-xs mt-4`}>
                           <div className="space-y-0.5">
-                            <p className="font-bold text-indigo-800 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
+                            <p className={`font-bold ${theme.primarySubText} uppercase tracking-wider text-[10px]`}>Customer / Client 客戶資料：</p>
                             <h2 className="text-sm font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
                             {currentPrintClient && (
                               <div className="text-slate-600 space-y-0.5 pt-0.5 text-[11px]">
@@ -1085,8 +1155,8 @@ export default function GiftCreeperApp() {
                           <div className="text-left sm:text-right flex flex-col justify-between">
                             <div>
                               <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Status 狀態：</p>
-                              <span className="inline-block mt-0.5 px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-md text-[11px]">
-                                {selectedOrderForPrint.status === 'Quoted' ? '待確認報價 (Quoted)' : selectedOrderForPrint.status}
+                              <span className="inline-block mt-0.5 px-2.5 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded-md text-[11px]">
+                                {isInvoice ? '正式發票 (Issued)' : selectedOrderForPrint.status}
                               </span>
                             </div>
                           </div>
@@ -1094,7 +1164,7 @@ export default function GiftCreeperApp() {
                       </td>
                     </tr>
 
-                    <tr className="bg-indigo-950 text-white uppercase text-[11px] tracking-wider">
+                    <tr className={`${theme.primaryBg} text-white uppercase text-[11px] tracking-wider`}>
                       <th className="p-2.5 w-10 text-center">#</th>
                       <th className="p-2.5">產品名稱與規格說明 (Item & Specifications)</th>
                       <th className="p-2.5 text-center w-16">數量</th>
@@ -1134,7 +1204,7 @@ export default function GiftCreeperApp() {
                           <td className="p-2.5 text-right font-mono text-slate-700 font-medium">
                             HK$ {unitPriceHkd.toLocaleString()}
                           </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-indigo-950">
+                          <td className={`p-2.5 text-right font-mono font-bold ${theme.primaryText}`}>
                             HK$ {itemHkdTotal.toLocaleString()}
                           </td>
                         </tr>
@@ -1149,17 +1219,17 @@ export default function GiftCreeperApp() {
                           <div className="flex flex-col md:flex-row justify-between items-start gap-4">
                             <div className="w-full md:w-1/2 md:max-w-[50%] space-y-1.5">
                               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 space-y-1">
-                                <p className="font-bold text-indigo-900 flex items-center gap-1 text-[10.5px]">
-                                  <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" /> 付款及服務條款 (Terms & Conditions)：
+                                <p className={`font-bold ${theme.primarySubText} flex items-center gap-1 text-[10.5px]`}>
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> 付款及服務條款 (Terms & Conditions)：
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
                                 {requiresDeposit && (
-                                  <p className="text-indigo-900 font-bold bg-indigo-100/60 p-1 rounded">
+                                  <p className={`${isInvoice ? 'text-emerald-900 bg-emerald-100/60' : 'text-indigo-900 bg-indigo-100/60'} font-bold p-1 rounded`}>
                                     • 訂金要求：本單總額超過 HK$3,500，須先付 50% 訂金，餘款於交貨時結清。
                                   </p>
                                 )}
-                                {selectedOrderForPrint.notes && <p className="text-indigo-700 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
+                                {selectedOrderForPrint.notes && <p className={`${theme.primarySubText} font-medium`}>• 備註：{selectedOrderForPrint.notes}</p>}
                                 
                                 <div className="pt-1 border-t border-slate-200 text-[8.5px] text-slate-500 space-y-0.5 leading-tight">
                                   <p>1. 上述貨品乃完全根據買方指定之品牌、型號、規格、品質標準及指定供應商進行採購與供貨。</p>
@@ -1173,18 +1243,18 @@ export default function GiftCreeperApp() {
                             </div>
 
                             <div className="w-full md:flex-1 text-right space-y-1.5 text-xs self-start pt-1 md:pl-2">
-                              <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-200 shadow-sm space-y-1">
+                              <div className={`${theme.boxBg} p-3 rounded-xl border ${theme.boxBorder} shadow-sm space-y-1`}>
                                 <div className="flex justify-between md:justify-end items-baseline gap-2 whitespace-nowrap">
-                                  <span className="font-bold text-xs text-indigo-950 shrink-0">總金額 (Grand Total):</span>
-                                  <span className="text-xl sm:text-2xl font-black text-indigo-900 font-mono tracking-tight shrink-0">
+                                  <span className={`font-bold text-xs ${theme.primaryText} shrink-0`}>總金額 (Grand Total):</span>
+                                  <span className={`text-xl sm:text-2xl font-black ${theme.grandTotalText} font-mono tracking-tight shrink-0`}>
                                     HK$ {computedGrandTotal.toLocaleString()}
                                   </span>
                                 </div>
 
                                 {/* 超過 HK$3,500 自動顯示 50% 訂金明細 */}
                                 {requiresDeposit && (
-                                  <div className="pt-2 border-t border-indigo-200/80 space-y-1 text-[11px] font-mono">
-                                    <div className="flex justify-between md:justify-end gap-3 text-indigo-950 font-bold">
+                                  <div className="pt-2 border-t border-slate-200/80 space-y-1 text-[11px] font-mono">
+                                    <div className={`flex justify-between md:justify-end gap-3 ${theme.primaryText} font-bold`}>
                                       <span>應付 50% 訂金 (50% Deposit):</span>
                                       <span className="text-emerald-700">HK$ {depositAmount.toLocaleString()}</span>
                                     </div>
