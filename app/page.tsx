@@ -29,7 +29,8 @@ import {
   Stamp,
   Menu,
   X,
-  CreditCard
+  CreditCard,
+  Tag
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -68,6 +69,7 @@ interface Order {
   exchange_rate: number;
   service_fee_pct: number;
   shipping_fee_rmb: number;
+  discount_hkd?: number;
   items: OrderItem[];
   subtotal_rmb: number;
   grand_total_hkd: number;
@@ -77,7 +79,7 @@ interface Order {
   created_at: string;
 }
 
-// 輔助函式：根據訂單明細精確計算四捨五入後的整數總金額
+// 輔助函式：根據訂單明細及折扣精確計算四捨五入後的整數總金額
 const computeOrderGrandTotal = (order: Order): number => {
   if (!order.items || order.items.length === 0) return order.grand_total_hkd || 0;
 
@@ -85,11 +87,15 @@ const computeOrderGrandTotal = (order: Order): number => {
   const rate = order.exchange_rate || 1.15;
   const servicePct = order.service_fee_pct || 0;
   const totalShippingRmb = order.shipping_fee_rmb || 0;
+  const discountHkd = Number(order.discount_hkd) || 0;
+
+  const discountPerPieceHkd = totalQty > 0 ? discountHkd / totalQty : 0;
 
   return order.items.reduce((sum, item) => {
     const shippingPerPieceRmb = totalQty > 0 ? totalShippingRmb / totalQty : 0;
-    const unitPriceHkd = Math.round(((Number(item.unit_cost_rmb) * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
-    return sum + (unitPriceHkd * (Number(item.qty) || 0));
+    const rawUnitPriceHkd = (((Number(item.unit_cost_rmb) * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate) - discountPerPieceHkd;
+    const roundedUnitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
+    return sum + (roundedUnitPriceHkd * (Number(item.qty) || 0));
   }, 0);
 };
 
@@ -228,6 +234,7 @@ export default function GiftCreeperApp() {
   const [exchangeRate, setExchangeRate] = useState<number>(1.15);
   const [serviceFeePct, setServiceFeePct] = useState<number>(30);
   const [shippingFeeRmb, setShippingFeeRmb] = useState<number>(50);
+  const [discountHkd, setDiscountHkd] = useState<number>(0);
   const [orderNotes, setOrderNotes] = useState('');
   const [orderItems, setOrderItems] = useState<OrderItem[]>([
     { id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }
@@ -242,6 +249,7 @@ export default function GiftCreeperApp() {
     setExchangeRate(1.15);
     setServiceFeePct(30);
     setShippingFeeRmb(50);
+    setDiscountHkd(0);
     setOrderNotes('');
     setUploadedScreenshotUrl(null);
     setOrderItems([{ id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
@@ -368,7 +376,7 @@ export default function GiftCreeperApp() {
     });
   };
 
-  // 全面採用整數（四捨五入）計算邏輯
+  // 全面採用整數（四捨五入）與折扣扣減計算邏輯
   const calculations = useMemo(() => {
     const totalQty = orderItems.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalRmb = orderItems.reduce((acc, item) => acc + (Number(item.unit_cost_rmb) * Number(item.qty)), 0);
@@ -376,16 +384,18 @@ export default function GiftCreeperApp() {
     const serviceFeeHkd = subtotalHkd * (serviceFeePct / 100);
     const shippingHkd = shippingFeeRmb * exchangeRate;
 
+    const discountPerPieceHkd = totalQty > 0 ? discountHkd / totalQty : 0;
+
     // 計算每個品項四捨五入後的整數小計，並加總得出總額
     const grandTotalHkd = orderItems.reduce((sum, item) => {
       const shippingPerPieceRmb = totalQty > 0 ? shippingFeeRmb / totalQty : 0;
-      const rawUnitPriceHkd = ((Number(item.unit_cost_rmb) * (1 + serviceFeePct / 100)) + shippingPerPieceRmb) * exchangeRate;
-      const roundedUnitPriceHkd = Math.round(rawUnitPriceHkd);
+      const rawUnitPriceHkd = (((Number(item.unit_cost_rmb) * (1 + serviceFeePct / 100)) + shippingPerPieceRmb) * exchangeRate) - discountPerPieceHkd;
+      const roundedUnitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
       return sum + (roundedUnitPriceHkd * (Number(item.qty) || 0));
     }, 0);
 
     return { subtotalRmb, subtotalHkd, serviceFeeHkd, shippingHkd, grandTotalHkd };
-  }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb]);
+  }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb, discountHkd]);
 
   const handleSaveOrder = async () => {
     if (!selectedClientId) {
@@ -412,6 +422,7 @@ export default function GiftCreeperApp() {
         exchange_rate: exchangeRate,
         service_fee_pct: serviceFeePct,
         shipping_fee_rmb: shippingFeeRmb,
+        discount_hkd: discountHkd,
         items: validItems,
         subtotal_rmb: calculations.subtotalRmb,
         grand_total_hkd: calculations.grandTotalHkd,
@@ -439,6 +450,7 @@ export default function GiftCreeperApp() {
         exchange_rate: exchangeRate,
         service_fee_pct: serviceFeePct,
         shipping_fee_rmb: shippingFeeRmb,
+        discount_hkd: discountHkd,
         items: validItems,
         subtotal_rmb: calculations.subtotalRmb,
         grand_total_hkd: calculations.grandTotalHkd,
@@ -468,6 +480,7 @@ export default function GiftCreeperApp() {
     setExchangeRate(order.exchange_rate);
     setServiceFeePct(order.service_fee_pct);
     setShippingFeeRmb(order.shipping_fee_rmb);
+    setDiscountHkd(order.discount_hkd || 0);
     setOrderNotes(order.notes || '');
     setUploadedScreenshotUrl(order.screenshot_url || null);
     setOrderItems(order.items && order.items.length > 0 ? order.items : [{ id: '1', name: '', spec: '', unit_cost_rmb: 0, qty: 100 }]);
@@ -830,11 +843,26 @@ export default function GiftCreeperApp() {
                   <div><label className="text-xs text-slate-400">匯率 (RMB → HKD)</label><input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 1)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
                   <div><label className="text-xs text-slate-400">服務費 / 利潤加成 (%)</label><input type="number" value={serviceFeePct} onChange={(e) => setServiceFeePct(parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
                   <div><label className="text-xs text-slate-400">國內運費 (RMB)</label><input type="number" value={shippingFeeRmb} onChange={(e) => setShippingFeeRmb(parseFloat(e.target.value) || 0)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
+                  <div>
+                    <label className="text-xs text-amber-400 font-bold flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5" /> 折扣 (HKD) - 不會顯示於報價單上
+                    </label>
+                    <input 
+                      type="number" 
+                      value={discountHkd} 
+                      onChange={(e) => setDiscountHkd(parseFloat(e.target.value) || 0)} 
+                      placeholder="0"
+                      className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white focus:outline-indigo-500 font-mono" 
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-4 border-t border-slate-800 space-y-2 text-sm">
                   <div className="flex justify-between text-slate-400"><span>貨品小計 (RMB)</span><span className="font-mono">¥ {calculations.subtotalRmb.toFixed(2)}</span></div>
                   <div className="flex justify-between text-slate-400"><span>貨品折合 (HKD)</span><span className="font-mono">HK$ {calculations.subtotalHkd.toFixed(2)}</span></div>
+                  {discountHkd > 0 && (
+                    <div className="flex justify-between text-amber-400"><span>已扣除折扣 (HKD)</span><span className="font-mono">- HK$ {discountHkd.toLocaleString()}</span></div>
+                  )}
                   <div className="flex justify-between items-baseline pt-2 border-t border-slate-700">
                     <span className="font-bold">建議報價單總額</span>
                     <span className="text-xl md:text-2xl font-bold text-emerald-400 font-mono">HK$ {calculations.grandTotalHkd.toLocaleString()}</span>
@@ -985,6 +1013,7 @@ export default function GiftCreeperApp() {
           const rate = selectedOrderForPrint.exchange_rate || 1.15;
           const servicePct = selectedOrderForPrint.service_fee_pct || 0;
           const totalShippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
+          const discountHkdVal = Number(selectedOrderForPrint.discount_hkd) || 0;
 
           // 四捨五入計算報價單總額
           const computedGrandTotal = computeOrderGrandTotal(selectedOrderForPrint);
@@ -993,6 +1022,8 @@ export default function GiftCreeperApp() {
           const requiresDeposit = computedGrandTotal > 3500;
           const depositAmount = Math.round(computedGrandTotal * 0.5);
           const balanceAmount = computedGrandTotal - depositAmount;
+
+          const discountPerPieceHkd = totalQuantity > 0 ? discountHkdVal / totalQuantity : 0;
 
           return (
             <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
@@ -1076,8 +1107,9 @@ export default function GiftCreeperApp() {
                     {selectedOrderForPrint.items.map((item, idx) => {
                       const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
                       
-                      // 1. 單價採用四捨五入取整數
-                      const unitPriceHkd = Math.round(((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
+                      // 1. 單價採用四捨五入取整數 (已默默扣除折扣平攤)
+                      const rawUnitPriceHkd = (((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate) - discountPerPieceHkd;
+                      const unitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
                       
                       // 2. 小計 = 四捨五入後的單價 × 數量
                       const itemHkdTotal = unitPriceHkd * item.qty;
