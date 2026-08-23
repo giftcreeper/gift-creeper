@@ -28,7 +28,8 @@ import {
   Languages,
   Stamp,
   Menu,
-  X
+  X,
+  CreditCard
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -676,7 +677,14 @@ export default function GiftCreeperApp() {
                       <tr key={order.id}>
                         <td className="p-3 font-mono font-medium text-slate-900">{order.order_no}</td>
                         <td className="p-3 font-medium">{order.client_name}</td>
-                        <td className="p-3 font-semibold text-slate-900">HK$ {order.grand_total_hkd.toLocaleString()}</td>
+                        <td className="p-3 font-semibold text-slate-900">
+                          HK$ {order.grand_total_hkd.toLocaleString()}
+                          {order.grand_total_hkd > 3500 && (
+                            <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
+                              需訂金
+                            </span>
+                          )}
+                        </td>
                         <td className="p-3"><span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{order.status}</span></td>
                       </tr>
                     ))}
@@ -831,6 +839,16 @@ export default function GiftCreeperApp() {
                     <span className="font-bold">建議報價單總額</span>
                     <span className="text-xl md:text-2xl font-bold text-emerald-400 font-mono">HK$ {calculations.grandTotalHkd.toLocaleString()}</span>
                   </div>
+
+                  {calculations.grandTotalHkd > 3500 && (
+                    <div className="bg-indigo-950/80 border border-indigo-700 p-2.5 rounded-lg text-xs space-y-1 text-indigo-200 mt-2">
+                      <div className="flex items-center gap-1.5 font-bold text-indigo-300">
+                        <CreditCard className="w-3.5 h-3.5" /> 觸發 50% 訂金條款 (總額 &gt; HK$ 3,500)
+                      </div>
+                      <div className="flex justify-between"><span>應付訂金 (50%):</span><strong className="font-mono text-emerald-300">HK$ {Math.round(calculations.grandTotalHkd * 0.5).toLocaleString()}</strong></div>
+                      <div className="flex justify-between text-slate-400"><span>交貨尾款 (50%):</span><span className="font-mono">HK$ {Math.round(calculations.grandTotalHkd * 0.5).toLocaleString()}</span></div>
+                    </div>
+                  )}
                 </div>
 
                 <button onClick={handleSaveOrder} className="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-lg font-bold">
@@ -846,58 +864,73 @@ export default function GiftCreeperApp() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
             <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600 min-w-[600px]">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[650px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
                   <tr>
                     <th className="p-4">訂單編號</th>
                     <th className="p-4">客戶學校</th>
                     <th className="p-4">金額 (HKD)</th>
-                    <th className="p-4">狀態</th>
+                    <th className="p-4">訂金狀態</th>
+                    <th className="p-4">訂單狀態</th>
                     <th className="p-4 text-center">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {orders.map(order => (
-                    <tr key={order.id} className="hover:bg-slate-50">
-                      <td className="p-4 font-mono font-bold text-slate-900">{order.order_no}</td>
-                      <td className="p-4 font-medium">{order.client_name}</td>
-                      <td className="p-4 font-bold font-mono">HK$ {order.grand_total_hkd.toLocaleString()}</td>
-                      <td className="p-4">
-                        <select value={order.status} onChange={(e) => handleUpdateStatus(order.id, e.target.value as any)} className="bg-slate-100 border text-xs rounded p-1 font-medium">
-                          <option value="Draft">Draft</option>
-                          <option value="Quoted">Quoted</option>
-                          <option value="Confirmed">Confirmed</option>
-                          <option value="Shipped">Shipped</option>
-                          <option value="Completed">Completed</option>
-                        </select>
-                      </td>
-                      <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button 
-                            onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} 
-                            className="bg-indigo-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-800"
-                            title="檢視/列印"
-                          >
-                            <Printer className="w-3.5 h-3.5" /> 列印
-                          </button>
-                          <button 
-                            onClick={() => handleEditOrder(order)} 
-                            className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-100"
-                            title="修改訂單"
-                          >
-                            <Edit className="w-3.5 h-3.5" /> 編輯
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteOrder(order.id, order.order_no)} 
-                            className="bg-red-50 text-red-600 border border-red-200 px-2 py-1.5 rounded text-xs font-medium flex items-center hover:bg-red-100"
-                            title="刪除訂單"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {orders.map(order => {
+                    const requiresDeposit = order.grand_total_hkd > 3500;
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50">
+                        <td className="p-4 font-mono font-bold text-slate-900">{order.order_no}</td>
+                        <td className="p-4 font-medium">{order.client_name}</td>
+                        <td className="p-4 font-bold font-mono text-slate-900">
+                          HK$ {order.grand_total_hkd.toLocaleString()}
+                        </td>
+                        <td className="p-4">
+                          {requiresDeposit ? (
+                            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-xs font-bold">
+                              <CreditCard className="w-3 h-3" /> 50% Deposit
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">全款</span>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <select value={order.status} onChange={(e) => handleUpdateStatus(order.id, e.target.value as any)} className="bg-slate-100 border text-xs rounded p-1 font-medium">
+                            <option value="Draft">Draft</option>
+                            <option value="Quoted">Quoted</option>
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Completed">Completed</option>
+                          </select>
+                        </td>
+                        <td className="p-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button 
+                              onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} 
+                              className="bg-indigo-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-800"
+                              title="檢視/列印"
+                            >
+                              <Printer className="w-3.5 h-3.5" /> 列印
+                            </button>
+                            <button 
+                              onClick={() => handleEditOrder(order)} 
+                              className="bg-indigo-50 text-indigo-600 border border-indigo-200 px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-100"
+                              title="修改訂單"
+                            >
+                              <Edit className="w-3.5 h-3.5" /> 編輯
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteOrder(order.id, order.order_no)} 
+                              className="bg-red-50 text-red-600 border border-red-200 px-2 py-1.5 rounded text-xs font-medium flex items-center hover:bg-red-100"
+                              title="刪除訂單"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -955,6 +988,11 @@ export default function GiftCreeperApp() {
 
           // 四捨五入計算報價單總額
           const computedGrandTotal = computeOrderGrandTotal(selectedOrderForPrint);
+          
+          // 判定是否需收取 50% 訂金（超過 HK$3,500）
+          const requiresDeposit = computedGrandTotal > 3500;
+          const depositAmount = Math.round(computedGrandTotal * 0.5);
+          const balanceAmount = computedGrandTotal - depositAmount;
 
           return (
             <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
@@ -1084,6 +1122,11 @@ export default function GiftCreeperApp() {
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
+                                {requiresDeposit && (
+                                  <p className="text-indigo-900 font-bold bg-indigo-100/60 p-1 rounded">
+                                    • 訂金要求：本單總額超過 HK$3,500，須先付 50% 訂金，餘款於交貨時結清。
+                                  </p>
+                                )}
                                 {selectedOrderForPrint.notes && <p className="text-indigo-700 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
                                 
                                 <div className="pt-1 border-t border-slate-200 text-[8.5px] text-slate-500 space-y-0.5 leading-tight">
@@ -1097,12 +1140,28 @@ export default function GiftCreeperApp() {
                               </div>
                             </div>
 
-                            <div className="w-full md:flex-1 text-right space-y-1 text-xs self-start pt-1 md:pl-2">
-                              <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-200 flex justify-between md:justify-end items-baseline gap-2 whitespace-nowrap shadow-sm">
-                                <span className="font-bold text-xs text-indigo-950 shrink-0">總金額 (Grand Total):</span>
-                                <span className="text-xl sm:text-2xl font-black text-indigo-900 font-mono tracking-tight shrink-0">
-                                  HK$ {computedGrandTotal.toLocaleString()}
-                                </span>
+                            <div className="w-full md:flex-1 text-right space-y-1.5 text-xs self-start pt-1 md:pl-2">
+                              <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-200 shadow-sm space-y-1">
+                                <div className="flex justify-between md:justify-end items-baseline gap-2 whitespace-nowrap">
+                                  <span className="font-bold text-xs text-indigo-950 shrink-0">總金額 (Grand Total):</span>
+                                  <span className="text-xl sm:text-2xl font-black text-indigo-900 font-mono tracking-tight shrink-0">
+                                    HK$ {computedGrandTotal.toLocaleString()}
+                                  </span>
+                                </div>
+
+                                {/* 超過 HK$3,500 自動顯示 50% 訂金明細 */}
+                                {requiresDeposit && (
+                                  <div className="pt-2 border-t border-indigo-200/80 space-y-1 text-[11px] font-mono">
+                                    <div className="flex justify-between md:justify-end gap-3 text-indigo-950 font-bold">
+                                      <span>應付 50% 訂金 (50% Deposit):</span>
+                                      <span className="text-emerald-700">HK$ {depositAmount.toLocaleString()}</span>
+                                    </div>
+                                    <div className="flex justify-between md:justify-end gap-3 text-slate-500">
+                                      <span>交貨尾款 (Balance Due):</span>
+                                      <span>HK$ {balanceAmount.toLocaleString()}</span>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
