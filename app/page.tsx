@@ -472,7 +472,7 @@ export default function GiftCreeperApp() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden print:h-auto print:overflow-visible">
-      {/* 修正列印問題：全域解鎖高度與 overflow，並保留背景底色 */}
+      {/* 全域列印樣式優化 */}
       <style jsx global>{`
         @media print {
           html, body, #__next, main, div {
@@ -491,7 +491,7 @@ export default function GiftCreeperApp() {
         }
       `}</style>
       
-      {/* 手機版頂部 Header Bar (僅手機顯示) */}
+      {/* 手機版頂部 Header Bar */}
       <header className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center print:hidden border-b border-slate-800 z-50">
         <div className="flex items-center gap-2">
           <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
@@ -1069,33 +1069,42 @@ export default function GiftCreeperApp() {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-8 pt-4 text-center text-xs text-slate-600">
-                            <div className="space-y-6">
-                              <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
-                              <p className="font-bold text-slate-800">客戶確認簽署及蓋單章<br/><span className="text-slate-400 font-normal text-[10px]">(Customer Accepted & Chopped)</span></p>
+                          {/* 簽署區塊：已增加 mt-12 及 min-h-[80px] 強制維持合適高度與距離 */}
+                          <div className="grid grid-cols-2 gap-8 pt-6 mt-12 text-center text-xs text-slate-600">
+                            <div className="flex flex-col justify-end space-y-2">
+                              <div className="h-20 min-h-[80px]"></div>
+                              <div className="border-b border-slate-400 w-3/4 mx-auto"></div>
+                              <p className="font-bold text-slate-800 pt-1">
+                                客戶確認簽署及蓋單章<br/>
+                                <span className="text-slate-400 font-normal text-[10px]">(Customer Accepted & Chopped)</span>
+                              </p>
                             </div>
                             
-                            <div className="space-y-2 relative">
+                            <div className="flex flex-col justify-end space-y-2 relative">
                               {companyChopUrl ? (
                                 <img 
                                   src={companyChopUrl} 
                                   alt="Company Chop" 
-                                  className="absolute -top-6 right-2 h-24 md:h-28 object-contain pointer-events-none select-none opacity-90"
+                                  className="absolute -top-4 right-4 h-24 md:h-28 object-contain pointer-events-none select-none opacity-90"
                                 />
                               ) : (
-                                <div className="absolute -top-4 right-4 w-24 h-24 md:w-28 md:h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                                <div className="absolute -top-2 right-4 w-24 h-24 md:w-28 md:h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
                                   <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
                                   <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
                                   <span className="text-[8px] font-bold">CHOP / SIGN</span>
                                 </div>
                               )}
 
-                              <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
-                              <p className="font-bold text-slate-800">GIFT CREEPER TRADING CO. 授權簽署<br/><span className="text-slate-400 font-normal text-[10px]">(Authorized Signature & Chop)</span></p>
+                              <div className="h-20 min-h-[80px]"></div>
+                              <div className="border-b border-slate-400 w-3/4 mx-auto"></div>
+                              <p className="font-bold text-slate-800 pt-1">
+                                GIFT CREEPER TRADING CO. 授權簽署<br/>
+                                <span className="text-slate-400 font-normal text-[10px]">(Authorized Signature & Chop)</span>
+                              </p>
                             </div>
                           </div>
 
-                          <div className="text-center text-[10px] text-slate-400 pt-2 border-t border-slate-200">
+                          <div className="text-center text-[10px] text-slate-400 pt-4 border-t border-slate-200">
                             Thank you for your business! 多謝惠顧，期待再次為您服務。
                           </div>
                         </div>
