@@ -55,22 +55,19 @@ const WORD_MAP: [RegExp, string][] = [
 
 // 高效單字對照字典
 const SIMP_CHARS = "万与丑专业丛东丝丢两严丧个丬丰临丽举么义乌乐乔习乡书买乱争于亏云亚产亩亲亵亸亿什仁仆仇今介仍仑仓风货产品单价数量规格黑色白色红色黄色蓝色绿色爱罢备贝毕笔毕边宾剧仓产长尝车齿虫刍从导岛动东关观国过华画划机积极际继夹拣见洁结届进经具据局举决壳夸况矿库来劳乐离礼丽两连帘怜粮疗辽龙楼罗麦马门面秒庙灭母脑鸟盘辟凭朴迁气千墙齐岂启抢强桥乔切亲琼区曲权劝却让热人认荣如扫色杀纱筛删闪陕设社审实识事势适书术树双水丝苏诉算随台态钛体条统头图涂团椭洼湾网伟伪纬苇卫温闻无武五务响项萧销小效斜写协心新信星刑行凶修虚续轩选学雪训迅压雅亚严羊阳样腰摇咬药要业叶医宜义艺亿忆议译异隐赢荧硬佣优邮油游友有又幼于余娱雨语玉域育元员园原源远约月越云运杂灾择则泽贼张掌长帐胀障招找召赵折这针侦珍真阵正证郑只知直织执职值纸址制质钟终种重周洲朱竹主著筑住注祝专转庄装壮状准备着资子字自宗";
-const TRAD_CHARS = "萬與醜專業叢東絲丟兩嚴喪個爿豐臨麗舉麼義烏樂喬習鄉書買亂爭於虧雲亞產畝親褻嚲億什仁僕仇今介仍侖倉風貨產品單價數量規格黑色白色紅色黃色藍色綠色愛罷備貝畢筆畢邊賓劇倉產長嘗車齒蟲芻從導島動東關觀國過華畫劃機積極際繼夾揀見潔結屆進經具據局舉決殼誇況礦庫來勞樂離禮麗兩連簾憐糧療遼龍樓羅麥馬門面秒廟滅母腦鳥盤辟憑樸遷氣千牆齊豈啟搶強橋喬切親瓊區曲權勸卻讓熱人認榮如掃色殺紗篩刪閃陝設社審實識事勢適書術樹雙水絲蘇訴算隨台態鈦體條統頭圖塗團橢窪灣網偉偽緯葦衛溫聞無武五務響項蕭銷小效斜寫協心新信星刑行凶修虛續軒選學雪訓迅壓雅亞嚴羊陽樣腰搖咬藥要業葉醫宜義藝億憶議譯異隱贏熒硬傭優郵油遊友有又幼於餘娛雨語玉域育元員園原源遠約月越雲運雜災擇則澤賊張掌長帳脹障招找召趙折這針偵珍真陣正證鄭只知直織執職值紙址制質鐘終種重周洲朱竹主著築住注祝專轉莊裝壯狀準備著資子字自宗";
+const TRAD_CHARS = "萬與醜專業叢東絲丟兩嚴喪個爿豐臨麗舉麼義烏樂喬習鄉書買亂爭於虧雲亞產畝親褻嚲億什仁僕仇今介仍侖倉風貨產品單價數量規格黑色白色紅色黃色藍色綠色愛罷備貝畢筆畢邊賓劇倉產長嘗車齒蟲芻從導島動東關觀國過華畫劃機積極際繼夾揀見潔結屆進經具據局舉決殼誇況礦庫來勞樂離禮麗兩連簾憐糧療遼龍樓羅麥馬門面秒廟滅母腦鳥盤辟憑樸遷氣千牆齊豈啟搶強橋喬切親瓊區曲權勸卻讓熱人認榮如掃色殺紗篩刪閃陝設社審實識事勢適書術樹雙水絲蘇訴算隨台態鈦體條統頭圖塗團橢窪灣網偽偽緯葦衛溫聞無武五務響項蕭銷小效斜寫協心新信星刑行凶修虛續軒選學雪訓迅壓雅亞嚴羊陽樣腰搖咬藥要業葉醫宜義藝億憶議譯異隱贏熒硬傭優郵油遊友有又幼於餘娛雨語玉域育元員園原源遠約月越雲運雜災擇則擇賊張掌長帳脹障招找召趙折這針偵珍真陣正證鄭只知直織執職值紙址制質鐘終種重周洲朱竹主著築住注祝專轉莊裝壯狀準備著資子字自宗";
 
 const charMap: Record<string, string> = {};
 for (let i = 0; i < SIMP_CHARS.length; i++) {
   charMap[SIMP_CHARS[i]] = TRAD_CHARS[i];
 }
 
-// 手動觸發轉換函式
 const convertSimpToTrad = (str: string) => {
   if (!str) return '';
   let result = str;
-  // 1. 先匹配常用詞
   for (const [pattern, replace] of WORD_MAP) {
     result = result.replace(pattern, replace);
   }
-  // 2. 再逐字替換
   return result.split('').map(char => charMap[char] || char).join('');
 };
 
@@ -115,9 +112,9 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
   
-  // Logo 與 公司印章 URL State
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('');
-  const [companyChopUrl, setCompanyChopUrl] = useState<string>('');
+  // 預設將圖檔路徑設為 public 資料夾中的 /logo.png 與 /chop.png
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('/logo.png');
+  const [companyChopUrl, setCompanyChopUrl] = useState<string>('/chop.png');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -169,7 +166,7 @@ export default function GiftCreeperApp() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // 上傳公司 Logo
+  // 上傳公司 Logo 補充功能
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -177,14 +174,18 @@ export default function GiftCreeperApp() {
       reader.onload = () => {
         const url = reader.result as string;
         setCompanyLogoUrl(url);
-        localStorage.setItem('company_logo_url', url);
-        alert('公司 Logo 上傳成功！');
+        try {
+          localStorage.setItem('company_logo_url', url);
+          alert('公司 Logo 已上傳並快取於瀏覽器！');
+        } catch (err) {
+          alert('圖片檔案較大，暫無法自動儲存於快取。建議直接替換 public/logo.png 圖片！');
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // 上傳電子印章圖片
+  // 上傳電子印章圖片補充功能
   const handleChopUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -192,14 +193,17 @@ export default function GiftCreeperApp() {
       reader.onload = () => {
         const url = reader.result as string;
         setCompanyChopUrl(url);
-        localStorage.setItem('company_chop_url', url);
-        alert('電子公司印章上傳成功！已套用至報價單。');
+        try {
+          localStorage.setItem('company_chop_url', url);
+          alert('電子公司印章已上傳並快取於瀏覽器！');
+        } catch (err) {
+          alert('圖片檔案較大，暫無法自動儲存於快取。建議直接替換 public/chop.png 圖片！');
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // 列印並自動設定下載 PDF 檔案名稱
   const handlePrintQuotation = () => {
     if (selectedOrderForPrint) {
       const originalTitle = document.title;
@@ -209,7 +213,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  // --- 客戶管理表單 ---
   const [newClient, setNewClient] = useState({ school_name: '', contact_person: '', phone: '', email: '', address: '' });
   const [clientSearch, setClientSearch] = useState('');
 
@@ -227,7 +230,6 @@ export default function GiftCreeperApp() {
     alert('成功新增客戶紀錄！');
   };
 
-  // --- 開單與編輯狀態 ---
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [selectedClientId, setSelectedClientId] = useState('');
   const [exchangeRate, setExchangeRate] = useState<number>(1.15);
@@ -348,7 +350,6 @@ export default function GiftCreeperApp() {
     }
   };
 
-  // 手動按鈕：一鍵將當前所有產品項目的品名與規格轉為繁體
   const handleManualTranslateAll = () => {
     setOrderItems(prevItems => 
       prevItems.map(item => ({
@@ -698,7 +699,6 @@ export default function GiftCreeperApp() {
                       <PackageCheck className="w-5 h-5 text-indigo-600" /> 2. 產品明細 (RMB)
                     </h3>
                     <div className="flex items-center gap-2">
-                      {/* 手動一鍵轉繁體按鈕 */}
                       <button 
                         onClick={handleManualTranslateAll} 
                         type="button"
