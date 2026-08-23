@@ -1069,10 +1069,10 @@ export default function GiftCreeperApp() {
                             </div>
                           </div>
 
-                          {/* 簽署區塊：已增加 mt-12 及 min-h-[80px] 強制維持合適高度與距離 */}
-                          <div className="grid grid-cols-2 gap-8 pt-6 mt-12 text-center text-xs text-slate-600">
+                          {/* 簽署區塊：完美對齊橫線，避免印章位置下降 */}
+                          <div className="grid grid-cols-2 gap-8 pt-6 mt-8 text-center text-xs text-slate-600">
                             <div className="flex flex-col justify-end space-y-2">
-                              <div className="h-20 min-h-[80px]"></div>
+                              <div className="h-16 min-h-[60px]"></div>
                               <div className="border-b border-slate-400 w-3/4 mx-auto"></div>
                               <p className="font-bold text-slate-800 pt-1">
                                 客戶確認簽署及蓋單章<br/>
@@ -1080,23 +1080,26 @@ export default function GiftCreeperApp() {
                               </p>
                             </div>
                             
-                            <div className="flex flex-col justify-end space-y-2 relative">
-                              {companyChopUrl ? (
-                                <img 
-                                  src={companyChopUrl} 
-                                  alt="Company Chop" 
-                                  className="absolute -top-4 right-4 h-24 md:h-28 object-contain pointer-events-none select-none opacity-90"
-                                />
-                              ) : (
-                                <div className="absolute -top-2 right-4 w-24 h-24 md:w-28 md:h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
-                                  <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
-                                  <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
-                                  <span className="text-[8px] font-bold">CHOP / SIGN</span>
-                                </div>
-                              )}
+                            <div className="flex flex-col justify-end space-y-2">
+                              <div className="h-16 min-h-[60px]"></div>
+                              
+                              {/* 橫線與印章容器 (以橫線為基準進行絕對定位) */}
+                              <div className="relative w-3/4 mx-auto border-b border-slate-400">
+                                {companyChopUrl ? (
+                                  <img 
+                                    src={companyChopUrl} 
+                                    alt="Company Chop" 
+                                    className="absolute -bottom-4 right-2 h-24 md:h-28 object-contain pointer-events-none select-none opacity-90"
+                                  />
+                                ) : (
+                                  <div className="absolute -bottom-4 right-2 w-24 h-24 md:w-28 md:h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                                    <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
+                                    <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
+                                    <span className="text-[8px] font-bold">CHOP / SIGN</span>
+                                  </div>
+                                )}
+                              </div>
 
-                              <div className="h-20 min-h-[80px]"></div>
-                              <div className="border-b border-slate-400 w-3/4 mx-auto"></div>
                               <p className="font-bold text-slate-800 pt-1">
                                 GIFT CREEPER TRADING CO. 授權簽署<br/>
                                 <span className="text-slate-400 font-normal text-[10px]">(Authorized Signature & Chop)</span>
