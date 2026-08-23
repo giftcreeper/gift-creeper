@@ -472,6 +472,15 @@ export default function GiftCreeperApp() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
+      {/* 注入列印時保留背景圖與背景顏色的 CSS */}
+      <style jsx global>{`
+        @media print {
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
       
       {/* 手機版頂部 Header Bar (僅手機顯示) */}
       <header className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center print:hidden border-b border-slate-800 z-50">
@@ -489,7 +498,7 @@ export default function GiftCreeperApp() {
         </button>
       </header>
 
-      {/* 側邊導覽列 (響應式：手機版抽屜，電腦版固定) */}
+      {/* 側邊導覽列 */}
       <aside className={`
         fixed md:relative inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col justify-between print:hidden transition-transform duration-300 ease-in-out
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
@@ -558,7 +567,7 @@ export default function GiftCreeperApp() {
         </div>
       </aside>
 
-      {/* 手機選單遮罩 (點擊空白處可關閉選單) */}
+      {/* 手機選單遮罩 */}
       {isMobileMenuOpen && (
         <div 
           onClick={() => setIsMobileMenuOpen(false)} 
