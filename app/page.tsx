@@ -1236,8 +1236,9 @@ export default function GiftCreeperApp() {
                             </div>
                           </div>
 
-                          <div className="text-center text-[10px] text-slate-400 pt-4 border-t border-slate-200">
-                            Thank you for your business! 多謝惠顧，期待再次為您服務。
+                          <div className="text-center text-[10px] text-slate-400 pt-4 border-t border-slate-200 space-y-0.5">
+                            <p>Thank you for your business! 多謝惠顧，期待再次為您服務。</p>
+                            <p className="font-semibold text-slate-500">＊本電子文件連同公司印章將被視作正本處理。＊</p>
                           </div>
                         </div>
                       </td>
