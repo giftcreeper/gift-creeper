@@ -26,7 +26,9 @@ import {
   Upload,
   CheckCircle2,
   Languages,
-  Stamp
+  Stamp,
+  Menu,
+  X
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -80,6 +82,9 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
   
+  // 手機版選單開關 State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   // 預設圖檔指向 public 資料夾
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('/logo.png');
   const [companyChopUrl, setCompanyChopUrl] = useState<string>('/chop.png');
@@ -466,11 +471,31 @@ export default function GiftCreeperApp() {
   }, [orders, clients]);
 
   return (
-    <div className="flex h-screen bg-slate-100 font-sans text-slate-800">
-      {/* 側邊導覽列 */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between print:hidden">
+    <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden">
+      
+      {/* 手機版頂部 Header Bar (僅手機顯示) */}
+      <header className="md:hidden bg-slate-900 text-white p-4 flex justify-between items-center print:hidden border-b border-slate-800 z-50">
+        <div className="flex items-center gap-2">
+          <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
+            <DollarSign className="w-5 h-5" />
+          </div>
+          <span className="font-bold text-base tracking-wide">Gift Creeper</span>
+        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="p-1.5 text-slate-300 hover:text-white rounded-lg bg-slate-800 focus:outline-none"
+        >
+          {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </header>
+
+      {/* 側邊導覽列 (響應式：手機版抽屜，電腦版固定) */}
+      <aside className={`
+        fixed md:relative inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col justify-between print:hidden transition-transform duration-300 ease-in-out
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+      `}>
         <div>
-          <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+          <div className="p-6 border-b border-slate-800 hidden md:flex items-center gap-3">
             <div className="bg-indigo-600 p-2 rounded-xl text-white">
               <DollarSign className="w-6 h-6" />
             </div>
@@ -479,27 +504,28 @@ export default function GiftCreeperApp() {
               <p className="text-xs text-slate-400">訂單管理系統</p>
             </div>
           </div>
-          <nav className="p-4 space-y-1">
+
+          <nav className="p-4 space-y-1 mt-12 md:mt-0">
             <button
-              onClick={() => setActiveTab('dashboard')}
+              onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <LayoutDashboard className="w-5 h-5" /> 數據總覽
             </button>
             <button
-              onClick={() => { resetOrderForm(); setActiveTab('create_order'); }}
+              onClick={() => { resetOrderForm(); setActiveTab('create_order'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'create_order' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <FilePlus className="w-5 h-5" /> {editingOrderId ? '修改訂單中' : '建立新訂單'}
             </button>
             <button
-              onClick={() => setActiveTab('orders')}
+              onClick={() => { setActiveTab('orders'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <ListOrdered className="w-5 h-5" /> 訂單列表
             </button>
             <button
-              onClick={() => setActiveTab('clients')}
+              onClick={() => { setActiveTab('clients'); setIsMobileMenuOpen(false); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'clients' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <Users className="w-5 h-5" /> 客戶/學校資料
@@ -532,72 +558,82 @@ export default function GiftCreeperApp() {
         </div>
       </aside>
 
+      {/* 手機選單遮罩 (點擊空白處可關閉選單) */}
+      {isMobileMenuOpen && (
+        <div 
+          onClick={() => setIsMobileMenuOpen(false)} 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+        />
+      )}
+
       {/* 主內容區域 */}
-      <main className="flex-1 overflow-y-auto p-8 print:p-0 print:overflow-visible print:bg-white">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 print:p-0 print:overflow-visible print:bg-white">
         {/* TAB 1: 數據總覽 */}
         {activeTab === 'dashboard' && (
           <div className="space-y-6">
-            <header className="flex justify-between items-center">
+            <header className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">儀表板 (Dashboard)</h2>
                 <p className="text-sm text-slate-500">歡迎回來，檢視最新的禮品訂單數據。</p>
               </div>
-              <button onClick={() => { resetOrderForm(); setActiveTab('create_order'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
+              <button onClick={() => { resetOrderForm(); setActiveTab('create_order'); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 shadow-sm w-full sm:w-auto">
                 <Plus className="w-4 h-4" /> 開立新單
               </button>
             </header>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg"><TrendingUp className="w-6 h-6" /></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg shrink-0"><TrendingUp className="w-6 h-6" /></div>
                 <div>
                   <p className="text-xs text-slate-500">總營業額 (HKD)</p>
-                  <h3 className="text-2xl font-bold text-slate-900">HK$ {stats.totalSales.toLocaleString()}</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">HK$ {stats.totalSales.toLocaleString()}</h3>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-amber-100 text-amber-600 rounded-lg"><Clock className="w-6 h-6" /></div>
+              <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-100 text-amber-600 rounded-lg shrink-0"><Clock className="w-6 h-6" /></div>
                 <div>
                   <p className="text-xs text-slate-500">待處理訂單</p>
-                  <h3 className="text-2xl font-bold text-slate-900">{stats.pendingOrders} 單</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">{stats.pendingOrders} 單</h3>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-indigo-100 text-indigo-600 rounded-lg"><PackageCheck className="w-6 h-6" /></div>
+              <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-indigo-100 text-indigo-600 rounded-lg shrink-0"><PackageCheck className="w-6 h-6" /></div>
                 <div>
                   <p className="text-xs text-slate-500">已完成訂單</p>
-                  <h3 className="text-2xl font-bold text-slate-900">{stats.completedOrders} 單</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">{stats.completedOrders} 單</h3>
                 </div>
               </div>
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                <div className="p-3 bg-blue-100 text-blue-600 rounded-lg"><Building className="w-6 h-6" /></div>
+              <div className="bg-white p-5 md:p-6 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-lg shrink-0"><Building className="w-6 h-6" /></div>
                 <div>
                   <p className="text-xs text-slate-500">客戶/學校總數</p>
-                  <h3 className="text-2xl font-bold text-slate-900">{stats.totalClients} 間</h3>
+                  <h3 className="text-xl md:text-2xl font-bold text-slate-900">{stats.totalClients} 間</h3>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-              <div className="flex justify-between items-center">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 md:p-6 space-y-4 overflow-x-auto">
+              <div className="flex justify-between items-center min-w-[300px]">
                 <h3 className="font-bold text-slate-900">近期訂單</h3>
                 <button onClick={() => setActiveTab('orders')} className="text-xs text-indigo-600 flex items-center gap-1">查看全部 <ArrowRight className="w-3 h-3" /></button>
               </div>
-              <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr><th className="p-3">訂單編號</th><th className="p-3">客戶學校</th><th className="p-3">金額 (HKD)</th><th className="p-3">狀態</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {orders.slice(0, 5).map(order => (
-                    <tr key={order.id}>
-                      <td className="p-3 font-mono font-medium text-slate-900">{order.order_no}</td>
-                      <td className="p-3 font-medium">{order.client_name}</td>
-                      <td className="p-3 font-semibold text-slate-900">HK$ {order.grand_total_hkd.toLocaleString()}</td>
-                      <td className="p-3"><span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{order.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-600 min-w-[500px]">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr><th className="p-3">訂單編號</th><th className="p-3">客戶學校</th><th className="p-3">金額 (HKD)</th><th className="p-3">狀態</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {orders.slice(0, 5).map(order => (
+                      <tr key={order.id}>
+                        <td className="p-3 font-mono font-medium text-slate-900">{order.order_no}</td>
+                        <td className="p-3 font-medium">{order.client_name}</td>
+                        <td className="p-3 font-semibold text-slate-900">HK$ {order.grand_total_hkd.toLocaleString()}</td>
+                        <td className="p-3"><span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{order.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -611,7 +647,7 @@ export default function GiftCreeperApp() {
               </h2>
               {editingOrderId && (
                 <button onClick={resetOrderForm} className="text-xs bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded font-medium text-slate-700">
-                  取消編輯 (切換為新建)
+                  取消編輯
                 </button>
               )}
             </header>
@@ -619,7 +655,7 @@ export default function GiftCreeperApp() {
             {/* AI 快捷填單區 */}
             <div 
               onClick={() => fileInputRef.current?.click()}
-              className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors cursor-pointer rounded-xl p-5 text-center shadow-sm relative overflow-hidden group"
+              className="bg-gradient-to-r from-indigo-50 to-purple-50 border-2 border-dashed border-indigo-200 hover:border-indigo-400 transition-colors cursor-pointer rounded-xl p-4 md:p-5 text-center shadow-sm relative overflow-hidden group"
             >
               <input 
                 type="file" 
@@ -630,9 +666,9 @@ export default function GiftCreeperApp() {
                 className="hidden" 
               />
 
-              <div className="flex items-center justify-center gap-2 text-indigo-900 font-bold text-base mb-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 text-indigo-900 font-bold text-sm md:text-base mb-1">
                 <Sparkles className="w-5 h-5 text-indigo-600 animate-pulse" />
-                AI 快捷填單：按 <kbd className="px-2 py-0.5 bg-white border border-indigo-300 rounded shadow-sm text-xs font-mono">Ctrl + V</kbd> 貼上截圖，或【點擊選取多張圖片】
+                AI 快捷填單：貼上截圖，或【點擊選取多張圖片】
               </div>
 
               <p className="text-xs text-indigo-600 flex items-center justify-center gap-1 mt-1">
@@ -648,9 +684,9 @@ export default function GiftCreeperApp() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="md:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
                   <h3 className="font-bold text-slate-900 flex items-center gap-2 border-b pb-2"><Building className="w-5 h-5 text-indigo-600" /> 1. 選擇客戶 / 學校</h3>
                   <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full border p-2.5 rounded-lg text-sm">
                     <option value="">-- 請選擇客戶 --</option>
@@ -658,32 +694,24 @@ export default function GiftCreeperApp() {
                   </select>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center border-b pb-2">
+                <div className="bg-white p-4 md:p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b pb-2">
                     <h3 className="font-bold text-slate-900 flex items-center gap-2">
                       <PackageCheck className="w-5 h-5 text-indigo-600" /> 2. 產品明細 (RMB)
                     </h3>
                     <div className="flex items-center gap-2">
-                      {/* OpenCC 手動一鍵轉繁體按鈕 */}
                       <button 
                         onClick={handleManualTranslateAll} 
                         type="button"
-                        className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 shadow-sm transition-colors"
+                        className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-2.5 py-1.5 rounded-lg font-bold flex items-center gap-1 shadow-sm transition-colors"
                       >
-                        <Languages className="w-3.5 h-3.5 text-emerald-600" /> ✨ OpenCC 一鍵轉繁體
+                        <Languages className="w-3.5 h-3.5 text-emerald-600" /> 一鍵轉繁體
                       </button>
 
-                      <button onClick={addOrderItem} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded font-medium flex items-center gap-1">
+                      <button onClick={addOrderItem} className="text-xs bg-indigo-50 text-indigo-600 px-2.5 py-1.5 rounded font-medium flex items-center gap-1">
                         <Plus className="w-3.5 h-3.5" /> 增加項目
                       </button>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-500 px-3 pt-1">
-                    <span className="col-span-5">品名</span>
-                    <span className="col-span-3">顏色/類別</span>
-                    <span className="col-span-2">單價 (RMB)</span>
-                    <span className="col-span-2">數量</span>
                   </div>
 
                   {orderItems.map((item, index) => (
@@ -699,47 +727,47 @@ export default function GiftCreeperApp() {
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-12 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                         <input
                           type="text"
                           placeholder="輸入品名"
                           value={item.name}
                           onChange={(e) => updateOrderItem(item.id, 'name', e.target.value)}
-                          className="col-span-5 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
+                          className="sm:col-span-5 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
                         />
                         <input
                           type="text"
                           placeholder="顏色/類別"
                           value={item.spec}
                           onChange={(e) => updateOrderItem(item.id, 'spec', e.target.value)}
-                          className="col-span-3 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
+                          className="sm:col-span-3 border p-2 rounded text-sm bg-white focus:outline-indigo-500"
                         />
                         <input
                           type="number"
                           placeholder="單價(RMB)"
                           value={item.unit_cost_rmb || ''}
                           onChange={(e) => updateOrderItem(item.id, 'unit_cost_rmb', parseFloat(e.target.value) || 0)}
-                          className="col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
+                          className="sm:col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
                         />
                         <input
                           type="number"
                           placeholder="數量"
                           value={item.qty || ''}
                           onChange={(e) => updateOrderItem(item.id, 'qty', parseInt(e.target.value) || 0)}
-                          className="col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
+                          className="sm:col-span-2 border p-2 rounded text-sm bg-white font-mono focus:outline-indigo-500"
                         />
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border space-y-2">
+                <div className="bg-white p-4 md:p-6 rounded-xl border space-y-2">
                   <h3 className="font-bold text-sm">訂單備註</h3>
                   <textarea rows={2} placeholder="例如：預計9月開學前交貨..." value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} className="w-full border p-2 rounded text-sm" />
                 </div>
               </div>
 
-              <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg space-y-6 h-fit">
+              <div className="bg-slate-900 text-white p-5 md:p-6 rounded-xl shadow-lg space-y-6 h-fit">
                 <h3 className="font-bold text-lg border-b border-slate-800 pb-3 flex items-center gap-2"><DollarSign className="w-5 h-5 text-indigo-400" /> 費用計算</h3>
                 <div className="space-y-3 text-sm">
                   <div><label className="text-xs text-slate-400">匯率 (RMB → HKD)</label><input type="number" step="0.01" value={exchangeRate} onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 1)} className="w-full bg-slate-800 border-slate-700 p-2 rounded text-white" /></div>
@@ -752,7 +780,7 @@ export default function GiftCreeperApp() {
                   <div className="flex justify-between text-slate-400"><span>貨品折合 (HKD)</span><span className="font-mono">HK$ {calculations.subtotalHkd.toFixed(2)}</span></div>
                   <div className="flex justify-between items-baseline pt-2 border-t border-slate-700">
                     <span className="font-bold">建議報價單總額</span>
-                    <span className="text-2xl font-bold text-emerald-400 font-mono">HK$ {calculations.grandTotalHkd.toLocaleString()}</span>
+                    <span className="text-xl md:text-2xl font-bold text-emerald-400 font-mono">HK$ {calculations.grandTotalHkd.toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -768,8 +796,8 @@ export default function GiftCreeperApp() {
         {activeTab === 'orders' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
-            <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-              <table className="w-full text-left text-sm text-slate-600">
+            <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[600px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
                   <tr>
                     <th className="p-4">訂單編號</th>
@@ -798,7 +826,7 @@ export default function GiftCreeperApp() {
                         <div className="flex items-center justify-center gap-2">
                           <button 
                             onClick={() => { setSelectedOrderForPrint(order); setActiveTab('print'); }} 
-                            className="bg-slate-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-slate-800"
+                            className="bg-indigo-900 text-white px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1 hover:bg-indigo-800"
                             title="檢視/列印"
                           >
                             <Printer className="w-3.5 h-3.5" /> 列印
@@ -844,19 +872,19 @@ export default function GiftCreeperApp() {
                 </form>
               </div>
 
-              <div className="md:col-span-2 bg-white rounded-xl border shadow-sm p-6 space-y-4">
-                <div className="flex justify-between items-center border-b pb-3">
+              <div className="md:col-span-2 bg-white rounded-xl border shadow-sm p-4 md:p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 border-b pb-3">
                   <h3 className="font-bold">學校清單 ({clients.length})</h3>
                   <div className="relative">
                     <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                    <input type="text" placeholder="搜尋學校..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="pl-9 pr-4 py-1.5 border rounded-lg text-xs" />
+                    <input type="text" placeholder="搜尋學校..." value={clientSearch} onChange={(e) => setClientSearch(e.target.value)} className="w-full sm:w-auto pl-9 pr-4 py-1.5 border rounded-lg text-xs" />
                   </div>
                 </div>
                 <div className="divide-y">
                   {clients.filter(c => c.school_name.includes(clientSearch)).map(client => (
                     <div key={client.id} className="py-3">
                       <h4 className="font-bold text-slate-900">{client.school_name}</h4>
-                      <p className="text-xs text-slate-500 flex gap-3 mt-1">
+                      <p className="text-xs text-slate-500 flex flex-wrap gap-3 mt-1">
                         <span><Users className="w-3 h-3 inline mr-1" />{client.contact_person || '未設置'}</span>
                         <span><Phone className="w-3 h-3 inline mr-1" />{client.phone || '未設置'}</span>
                         <span><Mail className="w-3 h-3 inline mr-1" />{client.email || '未設置'}</span>
@@ -880,50 +908,51 @@ export default function GiftCreeperApp() {
             <div className="space-y-6 max-w-4xl mx-auto">
               <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
                 <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
-                  ← 返回訂單列表
+                  ← 返回列表
                 </button>
                 <button 
                   onClick={handlePrintQuotation} 
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md transition-all transform hover:scale-105"
+                  className="bg-indigo-900 hover:bg-indigo-800 text-white px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-2 shadow-md"
                 >
-                  <Printer className="w-4 h-4" /> 列印 / 下載 PDF ({selectedOrderForPrint.order_no}.pdf)
+                  <Printer className="w-4 h-4" /> 列印 / 下載 PDF
                 </button>
               </div>
 
-              <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800">
-                <table className="w-full text-left border-collapse">
+              {/* A4 容器 */}
+              <div className="bg-white p-5 md:p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800 overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[500px]">
                   <thead className="print:table-header-group">
                     <tr>
                       <td colSpan={5} className="pb-4">
-                        <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start border-b-2 border-indigo-900 pb-4 gap-4">
                           <div className="flex items-center gap-4">
                             {companyLogoUrl ? (
-                              <img src={companyLogoUrl} alt="Company Logo" className="h-14 object-contain max-w-[160px]" />
+                              <img src={companyLogoUrl} alt="Company Logo" className="h-12 md:h-14 object-contain max-w-[140px] md:max-w-[160px]" />
                             ) : (
-                              <div className="w-12 h-12 bg-indigo-600 text-white font-black text-xl rounded-xl flex items-center justify-center shadow">
+                              <div className="w-10 h-10 md:w-12 md:h-12 bg-indigo-900 text-white font-black text-xl rounded-xl flex items-center justify-center shadow">
                                 GC
                               </div>
                             )}
                             <div>
-                              <h1 className="text-xl font-extrabold text-slate-900 tracking-wider">GIFT CREEPER</h1>
-                              <p className="text-xs font-bold text-indigo-600">博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
+                              <h1 className="text-xl md:text-2xl font-black text-indigo-950 tracking-wider">GIFT CREEPER</h1>
+                              <p className="text-xs font-bold text-indigo-700">博禮貿易公司 | GIFT CREEPER TRADING CO.</p>
                               <p className="text-[11px] text-slate-500 pt-0.5">📞 電話: +852 4624 0018 | ✉️ 電郵: GIFTCREEPER@GMAIL.COM</p>
                             </div>
                           </div>
-                          <div className="text-right space-y-1">
-                            <div className="inline-block bg-slate-900 text-white px-3 py-1 rounded text-xs font-extrabold tracking-widest uppercase shadow-sm">
+                          <div className="text-left sm:text-right space-y-1">
+                            <div className="inline-block bg-indigo-900 text-white px-3.5 py-1 rounded text-xs font-extrabold tracking-widest uppercase shadow-sm">
                               QUOTATION 報價單
                             </div>
                             <div className="text-xs text-slate-600 space-y-0.5 font-mono pt-1">
-                              <p><span className="text-slate-400">報價單號:</span> <strong className="text-slate-900">{selectedOrderForPrint.order_no}</strong></p>
+                              <p><span className="text-slate-400">報價單號:</span> <strong className="text-indigo-950">{selectedOrderForPrint.order_no}</strong></p>
                               <p><span className="text-slate-400">發單日期:</span> {formatDateYYYYMMDD(selectedOrderForPrint.created_at)}</p>
                             </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-indigo-50/50 p-3.5 rounded-r-xl border-l-4 border-indigo-900 border-t border-b border-r border-indigo-100 text-xs mt-4">
                           <div className="space-y-0.5">
-                            <p className="font-bold text-indigo-600 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
+                            <p className="font-bold text-indigo-800 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
                             <h2 className="text-sm font-bold text-slate-900">{selectedOrderForPrint.client_name}</h2>
                             {currentPrintClient && (
                               <div className="text-slate-600 space-y-0.5 pt-0.5 text-[11px]">
@@ -932,10 +961,10 @@ export default function GiftCreeperApp() {
                               </div>
                             )}
                           </div>
-                          <div className="text-right flex flex-col justify-between">
+                          <div className="text-left sm:text-right flex flex-col justify-between">
                             <div>
                               <p className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">Status 狀態：</p>
-                              <span className="inline-block mt-0.5 px-2 py-0.5 bg-amber-100 text-amber-800 font-bold rounded text-[11px]">
+                              <span className="inline-block mt-0.5 px-2.5 py-0.5 bg-amber-100 text-amber-800 font-bold rounded-md text-[11px]">
                                 {selectedOrderForPrint.status === 'Quoted' ? '待確認報價 (Quoted)' : selectedOrderForPrint.status}
                               </span>
                             </div>
@@ -944,7 +973,7 @@ export default function GiftCreeperApp() {
                       </td>
                     </tr>
 
-                    <tr className="bg-slate-900 text-white uppercase text-[11px] tracking-wider">
+                    <tr className="bg-indigo-950 text-white uppercase text-[11px] tracking-wider">
                       <th className="p-2.5 w-10 text-center">#</th>
                       <th className="p-2.5">產品名稱與規格說明 (Item & Specifications)</th>
                       <th className="p-2.5 text-center w-16">數量</th>
@@ -963,7 +992,7 @@ export default function GiftCreeperApp() {
                       const tradSpec = convertSimpToTrad(item.spec);
 
                       return (
-                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                        <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/70'}>
                           <td className="p-2.5 text-center text-slate-400 font-mono">{idx + 1}</td>
                           <td className="p-2.5">
                             <div className="font-bold text-slate-900 flex items-center gap-1.5 flex-wrap">
@@ -979,7 +1008,7 @@ export default function GiftCreeperApp() {
                           <td className="p-2.5 text-right font-mono text-slate-700 font-medium">
                             HK$ {unitPriceHkd.toFixed(2)}
                           </td>
-                          <td className="p-2.5 text-right font-mono font-bold text-slate-900">
+                          <td className="p-2.5 text-right font-mono font-bold text-indigo-950">
                             HK$ {itemHkdTotal.toLocaleString()}
                           </td>
                         </tr>
@@ -991,15 +1020,15 @@ export default function GiftCreeperApp() {
                     <tr>
                       <td colSpan={5} className="pt-6">
                         <div className="space-y-6">
-                          <div className="flex justify-between items-start gap-4">
-                            <div className="w-1/2 max-w-[50%] space-y-1.5">
+                          <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                            <div className="w-full md:w-1/2 md:max-w-[50%] space-y-1.5">
                               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 space-y-1">
-                                <p className="font-bold text-slate-900 flex items-center gap-1 text-[10.5px]">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> 付款及服務條款 (Terms & Conditions)：
+                                <p className="font-bold text-indigo-900 flex items-center gap-1 text-[10.5px]">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" /> 付款及服務條款 (Terms & Conditions)：
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
-                                {selectedOrderForPrint.notes && <p className="text-indigo-600 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
+                                {selectedOrderForPrint.notes && <p className="text-indigo-700 font-medium">• 備註：{selectedOrderForPrint.notes}</p>}
                                 
                                 <div className="pt-1 border-t border-slate-200 text-[8.5px] text-slate-500 space-y-0.5 leading-tight">
                                   <p>1. 上述貨品乃完全根據買方指定之品牌、型號、規格、品質標準及指定供應商進行採購與供貨。</p>
@@ -1012,18 +1041,16 @@ export default function GiftCreeperApp() {
                               </div>
                             </div>
 
-                            {/* 優化總金額顯示區：使用 flex 彈性與適應性字型避免超出邊界 */}
-                            <div className="flex-1 text-right space-y-1 text-xs self-start pt-1 pl-2">
-                              <div className="flex justify-end items-baseline gap-1 pb-2 border-b-2 border-slate-900 whitespace-nowrap">
-                                <span className="font-bold text-xs text-slate-900 shrink-0">總金額 (Grand Total):</span>
-                                <span className="text-lg sm:text-xl font-extrabold text-indigo-600 font-mono tracking-tight shrink-0">
+                            <div className="w-full md:flex-1 text-right space-y-1 text-xs self-start pt-1 md:pl-2">
+                              <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-200 flex justify-between md:justify-end items-baseline gap-2 whitespace-nowrap shadow-sm">
+                                <span className="font-bold text-xs text-indigo-950 shrink-0">總金額 (Grand Total):</span>
+                                <span className="text-xl sm:text-2xl font-black text-indigo-900 font-mono tracking-tight shrink-0">
                                   HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}
                                 </span>
                               </div>
                             </div>
                           </div>
 
-                          {/* 簽署區（印章位置調整至右側邊緣 right-2） */}
                           <div className="grid grid-cols-2 gap-8 pt-4 text-center text-xs text-slate-600">
                             <div className="space-y-6">
                               <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
@@ -1035,10 +1062,10 @@ export default function GiftCreeperApp() {
                                 <img 
                                   src={companyChopUrl} 
                                   alt="Company Chop" 
-                                  className="absolute -top-6 right-2 h-28 object-contain pointer-events-none select-none opacity-90"
+                                  className="absolute -top-6 right-2 h-24 md:h-28 object-contain pointer-events-none select-none opacity-90"
                                 />
                               ) : (
-                                <div className="absolute -top-4 right-4 w-28 h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
+                                <div className="absolute -top-4 right-4 w-24 h-24 md:w-28 md:h-28 border-2 border-red-600 rounded-full flex flex-col items-center justify-center text-red-600 transform -rotate-12 opacity-85 pointer-events-none select-none">
                                   <span className="text-[9px] font-bold tracking-tighter uppercase px-1">GIFT CREEPER TRADING</span>
                                   <span className="text-[14px] font-black my-0.5">★ 蓋章 ★</span>
                                   <span className="text-[8px] font-bold">CHOP / SIGN</span>
