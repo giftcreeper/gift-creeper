@@ -346,12 +346,22 @@ export default function GiftCreeperApp() {
     });
   };
 
+  // 全面採用整數（四捨五入）計算邏輯
   const calculations = useMemo(() => {
+    const totalQty = orderItems.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalRmb = orderItems.reduce((acc, item) => acc + (Number(item.unit_cost_rmb) * Number(item.qty)), 0);
     const subtotalHkd = subtotalRmb * exchangeRate;
     const serviceFeeHkd = subtotalHkd * (serviceFeePct / 100);
     const shippingHkd = shippingFeeRmb * exchangeRate;
-    const grandTotalHkd = Math.round(subtotalHkd + serviceFeeHkd + shippingHkd);
+
+    // 計算每個品項四捨五入後的整數小計，並加總得出總額
+    const grandTotalHkd = orderItems.reduce((sum, item) => {
+      const shippingPerPieceRmb = totalQty > 0 ? shippingFeeRmb / totalQty : 0;
+      const rawUnitPriceHkd = ((Number(item.unit_cost_rmb) * (1 + serviceFeePct / 100)) + shippingPerPieceRmb) * exchangeRate;
+      const roundedUnitPriceHkd = Math.round(rawUnitPriceHkd);
+      return sum + (roundedUnitPriceHkd * (Number(item.qty) || 0));
+    }, 0);
+
     return { subtotalRmb, subtotalHkd, serviceFeeHkd, shippingHkd, grandTotalHkd };
   }, [orderItems, exchangeRate, serviceFeePct, shippingFeeRmb]);
 
@@ -922,6 +932,13 @@ export default function GiftCreeperApp() {
           const servicePct = selectedOrderForPrint.service_fee_pct || 0;
           const totalShippingRmb = selectedOrderForPrint.shipping_fee_rmb || 0;
 
+          // 四捨五入計算報價單總額
+          const computedGrandTotal = selectedOrderForPrint.items.reduce((sum, item) => {
+            const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
+            const unitPriceHkd = Math.round(((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
+            return sum + (unitPriceHkd * item.qty);
+          }, 0);
+
           return (
             <div className="space-y-6 max-w-4xl mx-auto print:m-0 print:p-0 print:max-w-none">
               <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
@@ -1003,8 +1020,12 @@ export default function GiftCreeperApp() {
                   <tbody className="divide-y divide-slate-200 bg-white text-xs">
                     {selectedOrderForPrint.items.map((item, idx) => {
                       const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
-                      const unitPriceHkd = ((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate;
-                      const itemHkdTotal = Math.round(unitPriceHkd * item.qty);
+                      
+                      // 1. 單價採用四捨五入取整數
+                      const unitPriceHkd = Math.round(((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate);
+                      
+                      // 2. 小計 = 四捨五入後的單價 × 數量
+                      const itemHkdTotal = unitPriceHkd * item.qty;
 
                       const tradName = convertSimpToTrad(item.name);
                       const tradSpec = convertSimpToTrad(item.spec);
@@ -1024,7 +1045,7 @@ export default function GiftCreeperApp() {
                           </td>
                           <td className="p-2.5 text-center font-mono font-medium">{item.qty}</td>
                           <td className="p-2.5 text-right font-mono text-slate-700 font-medium">
-                            HK$ {unitPriceHkd.toFixed(2)}
+                            HK$ {unitPriceHkd.toLocaleString()}
                           </td>
                           <td className="p-2.5 text-right font-mono font-bold text-indigo-950">
                             HK$ {itemHkdTotal.toLocaleString()}
@@ -1063,13 +1084,13 @@ export default function GiftCreeperApp() {
                               <div className="bg-indigo-50/60 p-3 rounded-xl border border-indigo-200 flex justify-between md:justify-end items-baseline gap-2 whitespace-nowrap shadow-sm">
                                 <span className="font-bold text-xs text-indigo-950 shrink-0">總金額 (Grand Total):</span>
                                 <span className="text-xl sm:text-2xl font-black text-indigo-900 font-mono tracking-tight shrink-0">
-                                  HK$ {selectedOrderForPrint.grand_total_hkd.toLocaleString()}
+                                  HK$ {computedGrandTotal.toLocaleString()}
                                 </span>
                               </div>
                             </div>
                           </div>
 
-                          {/* 簽署區塊：完美對齊橫線，避免印章位置下降 */}
+                          {/* 簽署區塊 */}
                           <div className="grid grid-cols-2 gap-8 pt-6 mt-8 text-center text-xs text-slate-600">
                             <div className="flex flex-col justify-end space-y-2">
                               <div className="h-16 min-h-[60px]"></div>
@@ -1083,7 +1104,7 @@ export default function GiftCreeperApp() {
                             <div className="flex flex-col justify-end space-y-2">
                               <div className="h-16 min-h-[60px]"></div>
                               
-                              {/* 橫線與印章容器 (以橫線為基準進行絕對定位) */}
+                              {/* 橫線與印章容器 */}
                               <div className="relative w-3/4 mx-auto border-b border-slate-400">
                                 {companyChopUrl ? (
                                   <img 
