@@ -14,6 +14,7 @@
     "lucide-react": "^1.33.0",
     "multer": "^2.2.0",
     "next": "16.3.2",
+    "opencc-js": "^1.4.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

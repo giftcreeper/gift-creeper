@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import * as OpenCC from 'opencc-js';
 import {
   LayoutDashboard,
   Users,
@@ -21,7 +22,6 @@ import {
   PackageCheck,
   ArrowRight,
   Sparkles,
-  Image as ImageIcon,
   Loader2,
   Upload,
   CheckCircle2,
@@ -36,40 +36,8 @@ const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
-// 精準常用詞彙字典 (優先匹配詞彙)
-const WORD_MAP: [RegExp, string][] = [
-  [/定制/g, '客製'],
-  [/印制/g, '印製'],
-  [/笔记本/g, '筆記本'],
-  [/钥匙扣/g, '鑰匙扣'],
-  [/帆布袋/g, '帆布袋'],
-  [/手提袋/g, '手提袋'],
-  [/保温杯/g, '保溫杯'],
-  [/充电宝/g, '移動電源'],
-  [/数据线/g, '數據線'],
-  [/无纺布/g, '不織布'],
-  [/发票/g, '發票'],
-  [/报价单/g, '報價單'],
-  [/自动/g, '自動'],
-];
-
-// 高效單字對照字典
-const SIMP_CHARS = "万与丑专业丛东丝丢两严丧个丬丰临丽举么义乌乐乔习乡书买乱争于亏云亚产亩亲亵亸亿什仁仆仇今介仍仑仓风货产品单价数量规格黑色白色红色黄色蓝色绿色爱罢备贝毕笔毕边宾剧仓产长尝车齿虫刍从导岛动东关观国过华画划机积极际继夹拣见洁结届进经具据局举决壳夸况矿库来劳乐离礼丽两连帘怜粮疗辽龙楼罗麦马门面秒庙灭母脑鸟盘辟凭朴迁气千墙齐岂启抢强桥乔切亲琼区曲权劝却让热人认荣如扫色杀纱筛删闪陕设社审实识事势适书术树双水丝苏诉算随台态钛体条统头图涂团椭洼湾网伟伪纬苇卫温闻无武五务响项萧销小效斜写协心新信星刑行凶修虚续轩选学雪训迅压雅亚严羊阳样腰摇咬药要业叶医宜义艺亿忆议译异隐赢荧硬佣优邮油游友有又幼于余娱雨语玉域育元员园原源远约月越云运杂灾择则泽贼张掌长帐胀障招找召赵折这针侦珍真阵正证郑只知直织执职值纸址制质钟终种重周洲朱竹主著筑住注祝专转庄装壮状准备着资子字自宗";
-const TRAD_CHARS = "萬與醜專業叢東絲丟兩嚴喪個爿豐臨麗舉麼義烏樂喬習鄉書買亂爭於虧雲亞產畝親褻嚲億什仁僕仇今介仍侖倉風貨產品單價數量規格黑色白色紅色黃色藍色綠色愛罷備貝畢筆畢邊賓劇倉產長嘗車齒蟲芻從導島動東關觀國過華畫劃機積極際繼夾揀見潔結屆進經具據局舉決殼誇況礦庫來勞樂離禮麗兩連簾憐糧療遼龍樓羅麥馬門面秒廟滅母腦鳥盤辟憑樸遷氣千牆齊豈啟搶強橋喬切親瓊區曲權勸卻讓熱人認榮如掃色殺紗篩刪閃陝設社審實識事勢適書術樹雙水絲蘇訴算隨台態鈦體條統頭圖塗團橢窪灣網偽偽緯葦衛溫聞無武五務響項蕭銷小效斜寫協心新信星刑行凶修虛續軒選學雪訓迅壓雅亞嚴羊陽樣腰搖咬藥要業葉醫宜義藝億憶議譯異隱贏熒硬傭優郵油遊友有又幼於餘娛雨語玉域育元員園原源遠約月越雲運雜災擇則擇賊張掌長帳脹障招找召趙折這針偵珍真陣正證鄭只知直織執職值紙址制質鐘終種重周洲朱竹主著築住注祝專轉莊裝壯狀準備著資子字自宗";
-
-const charMap: Record<string, string> = {};
-for (let i = 0; i < SIMP_CHARS.length; i++) {
-  charMap[SIMP_CHARS[i]] = TRAD_CHARS[i];
-}
-
-const convertSimpToTrad = (str: string) => {
-  if (!str) return '';
-  let result = str;
-  for (const [pattern, replace] of WORD_MAP) {
-    result = result.replace(pattern, replace);
-  }
-  return result.split('').map(char => charMap[char] || char).join('');
-};
+// 初始化 OpenCC 簡體轉香港繁體轉換器 (cn -> hk)
+const convertSimpToTrad = OpenCC.Converter({ from: 'cn', to: 'hk' });
 
 interface Client {
   id: string;
@@ -112,7 +80,7 @@ export default function GiftCreeperApp() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
   
-  // 預設將圖檔路徑設為 public 資料夾中的 /logo.png 與 /chop.png
+  // 預設圖檔指向 public 資料夾
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string>('/logo.png');
   const [companyChopUrl, setCompanyChopUrl] = useState<string>('/chop.png');
 
@@ -166,7 +134,6 @@ export default function GiftCreeperApp() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
-  // 上傳公司 Logo 補充功能
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -176,16 +143,15 @@ export default function GiftCreeperApp() {
         setCompanyLogoUrl(url);
         try {
           localStorage.setItem('company_logo_url', url);
-          alert('公司 Logo 已上傳並快取於瀏覽器！');
+          alert('公司 Logo 上傳成功！');
         } catch (err) {
-          alert('圖片檔案較大，暫無法自動儲存於快取。建議直接替換 public/logo.png 圖片！');
+          alert('圖片檔案較大，建議直接覆蓋 public/logo.png！');
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // 上傳電子印章圖片補充功能
   const handleChopUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -195,9 +161,9 @@ export default function GiftCreeperApp() {
         setCompanyChopUrl(url);
         try {
           localStorage.setItem('company_chop_url', url);
-          alert('電子公司印章已上傳並快取於瀏覽器！');
+          alert('電子公司印章上傳成功！');
         } catch (err) {
-          alert('圖片檔案較大，暫無法自動儲存於快取。建議直接替換 public/chop.png 圖片！');
+          alert('圖片檔案較大，建議直接覆蓋 public/chop.png！');
         }
       };
       reader.readAsDataURL(file);
@@ -328,7 +294,7 @@ export default function GiftCreeperApp() {
           return isFirstRowEmpty ? aiRows : [...prevItems, ...aiRows];
         });
 
-        alert(`✨ AI 成功解析 ${files.length} 張圖，並已自動轉換為繁體中文！`);
+        alert(`✨ AI 成功解析 ${files.length} 張圖！`);
       } else {
         alert('⚠️ 無法識別購物車截圖，請確認圖片是否清晰。');
       }
@@ -350,15 +316,15 @@ export default function GiftCreeperApp() {
     }
   };
 
+  // 採用 OpenCC 進行精準繁體手動轉換
   const handleManualTranslateAll = () => {
-    setOrderItems(prevItems => 
-      prevItems.map(item => ({
-        ...item,
-        name: convertSimpToTrad(item.name),
-        spec: convertSimpToTrad(item.spec)
-      }))
-    );
-    alert('✨ 已完成！所有產品名稱與規格已手動轉換為繁體中文。');
+    const updated = orderItems.map(item => ({
+      ...item,
+      name: convertSimpToTrad(item.name),
+      spec: convertSimpToTrad(item.spec)
+    }));
+    setOrderItems([...updated]);
+    alert('✨ OpenCC 高精準度繁體轉換完成！');
   };
 
   const updateOrderItem = (id: string, field: keyof OrderItem, value: any) => {
@@ -699,12 +665,13 @@ export default function GiftCreeperApp() {
                       <PackageCheck className="w-5 h-5 text-indigo-600" /> 2. 產品明細 (RMB)
                     </h3>
                     <div className="flex items-center gap-2">
+                      {/* OpenCC 手動一鍵轉繁體按鈕 */}
                       <button 
                         onClick={handleManualTranslateAll} 
                         type="button"
                         className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 shadow-sm transition-colors"
                       >
-                        <Languages className="w-3.5 h-3.5 text-emerald-600" /> ✨ 一鍵翻譯全單為繁體
+                        <Languages className="w-3.5 h-3.5 text-emerald-600" /> ✨ OpenCC 一鍵轉繁體
                       </button>
 
                       <button onClick={addOrderItem} className="text-xs bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded font-medium flex items-center gap-1">
@@ -912,7 +879,6 @@ export default function GiftCreeperApp() {
 
           return (
             <div className="space-y-6 max-w-4xl mx-auto">
-              {/* 頂部操作按鈕 */}
               <div className="flex justify-between items-center print:hidden bg-slate-200 p-4 rounded-xl shadow-inner">
                 <button onClick={() => setActiveTab('orders')} className="text-sm font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1">
                   ← 返回訂單列表
@@ -925,14 +891,11 @@ export default function GiftCreeperApp() {
                 </button>
               </div>
 
-              {/* A4 容器 */}
               <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-xl print:shadow-none print:border-none print:p-0 print:m-0 font-sans text-slate-800">
-                
                 <table className="w-full text-left border-collapse">
                   <thead className="print:table-header-group">
                     <tr>
                       <td colSpan={5} className="pb-4">
-                        {/* 公司 Header (含 Logo) */}
                         <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                           <div className="flex items-center gap-4">
                             {companyLogoUrl ? (
@@ -959,7 +922,6 @@ export default function GiftCreeperApp() {
                           </div>
                         </div>
 
-                        {/* 客戶資料欄 */}
                         <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs mt-4">
                           <div className="space-y-0.5">
                             <p className="font-bold text-indigo-600 uppercase tracking-wider text-[10px]">Customer / Client 客戶資料：</p>
@@ -983,7 +945,6 @@ export default function GiftCreeperApp() {
                       </td>
                     </tr>
 
-                    {/* 表格抬頭 */}
                     <tr className="bg-slate-900 text-white uppercase text-[11px] tracking-wider">
                       <th className="p-2.5 w-10 text-center">#</th>
                       <th className="p-2.5">產品名稱與規格說明 (Item & Specifications)</th>
@@ -1030,11 +991,8 @@ export default function GiftCreeperApp() {
                   <tfoot>
                     <tr>
                       <td colSpan={5} className="pt-6">
-                        {/* 頁尾付款條款、T&C 與簽署欄 */}
                         <div className="space-y-6">
                           <div className="flex justify-between items-start gap-4">
-                            
-                            {/* 付款條款與 6 項 T&C */}
                             <div className="w-1/2 max-w-[50%] space-y-1.5">
                               <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[10px] text-slate-600 space-y-1">
                                 <p className="font-bold text-slate-900 flex items-center gap-1 text-[10.5px]">
@@ -1055,7 +1013,6 @@ export default function GiftCreeperApp() {
                               </div>
                             </div>
 
-                            {/* 總金額顯示區 */}
                             <div className="w-1/3 text-right space-y-1 text-xs self-start pt-1">
                               <div className="flex justify-between items-center pb-2 border-b-2 border-slate-900">
                                 <span className="font-bold text-xs text-slate-900 whitespace-nowrap">總金額 (Grand Total):</span>
@@ -1066,7 +1023,6 @@ export default function GiftCreeperApp() {
                             </div>
                           </div>
 
-                          {/* 簽署區（含公司印章） */}
                           <div className="grid grid-cols-2 gap-8 pt-4 text-center text-xs text-slate-600">
                             <div className="space-y-6">
                               <div className="border-b border-slate-400 h-12 w-3/4 mx-auto"></div>
