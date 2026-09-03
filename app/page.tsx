@@ -94,7 +94,11 @@ const computeOrderGrandTotal = (order: Order): number => {
 
   return order.items.reduce((sum, item) => {
     const shippingPerPieceRmb = totalQty > 0 ? totalShippingRmb / totalQty : 0;
-    const rawUnitPriceHkd = (((Number(item.unit_cost_rmb) * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate) - discountPerPieceHkd;
+    // 新算式：(單品 RMB 成本 + 平攤運費 RMB) * 匯率 * (1 + 服務費%) - 平攤折扣 HKD
+    const itemCostWithShippingRmb = Number(item.unit_cost_rmb) + shippingPerPieceRmb;
+    const itemCostHkd = itemCostWithShippingRmb * rate;
+    const rawUnitPriceHkd = (itemCostHkd * (1 + servicePct / 100)) - discountPerPieceHkd;
+    
     const roundedUnitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
     return sum + (roundedUnitPriceHkd * (Number(item.qty) || 0));
   }, 0);
@@ -381,7 +385,7 @@ export default function GiftCreeperApp() {
     });
   };
 
-  // 全面採用整數（四捨五入）與折扣扣減計算邏輯
+  // 全面採用新計算邏輯：單品 RMB 成本 + 平攤運費 RMB -> 折合 HKD -> 加上服務費 -> 減折扣 -> 四捨五入
   const calculations = useMemo(() => {
     const totalQty = orderItems.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalRmb = orderItems.reduce((acc, item) => acc + (Number(item.unit_cost_rmb) * Number(item.qty)), 0);
@@ -394,7 +398,12 @@ export default function GiftCreeperApp() {
     // 計算每個品項四捨五入後的整數小計，並加總得出總額
     const grandTotalHkd = orderItems.reduce((sum, item) => {
       const shippingPerPieceRmb = totalQty > 0 ? shippingFeeRmb / totalQty : 0;
-      const rawUnitPriceHkd = (((Number(item.unit_cost_rmb) * (1 + serviceFeePct / 100)) + shippingPerPieceRmb) * exchangeRate) - discountPerPieceHkd;
+      
+      // 新算式邏輯
+      const itemCostWithShippingRmb = Number(item.unit_cost_rmb) + shippingPerPieceRmb;
+      const itemCostHkd = itemCostWithShippingRmb * exchangeRate;
+      const rawUnitPriceHkd = (itemCostHkd * (1 + serviceFeePct / 100)) - discountPerPieceHkd;
+
       const roundedUnitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
       return sum + (roundedUnitPriceHkd * (Number(item.qty) || 0));
     }, 0);
@@ -1177,8 +1186,11 @@ export default function GiftCreeperApp() {
                     {selectedOrderForPrint.items.map((item, idx) => {
                       const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
                       
-                      // 1. 單價採用四捨五入取整數 (已默默扣除折扣平攤)
-                      const rawUnitPriceHkd = (((item.unit_cost_rmb * (1 + servicePct / 100)) + shippingPerPieceRmb) * rate) - discountPerPieceHkd;
+                      // 1. 單價採用新算式：(單品 RMB 成本 + 平攤運費 RMB) * 匯率 * (1 + 服務費%) - 平攤折扣 HKD
+                      const itemCostWithShippingRmb = item.unit_cost_rmb + shippingPerPieceRmb;
+                      const itemCostHkd = itemCostWithShippingRmb * rate;
+                      const rawUnitPriceHkd = (itemCostHkd * (1 + servicePct / 100)) - discountPerPieceHkd;
+
                       const unitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
                       
                       // 2. 小計 = 四捨五入後的單價 × 數量
