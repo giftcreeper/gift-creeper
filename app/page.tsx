@@ -31,7 +31,9 @@ import {
   X,
   CreditCard,
   Tag,
-  FileText
+  FileText,
+  PieChart,
+  Save
 } from 'lucide-react';
 
 // --- Supabase 初始化 ---
@@ -71,10 +73,11 @@ interface Order {
   service_fee_pct: number;
   shipping_fee_rmb: number;
   discount_hkd?: number;
+  actual_cost_hkd?: number;
   items: OrderItem[];
   subtotal_rmb: number;
   grand_total_hkd: number;
-  status: 'Draft' | 'Quoted' | 'Confirmed' | 'Shipped' | 'Completed';
+  status: 'Draft' | 'Quoted' | 'Confirmed' | 'Shipped' | 'Completed' | 'Cancelled';
   notes: string;
   screenshot_url?: string;
   created_at: string;
@@ -94,7 +97,6 @@ const computeOrderGrandTotal = (order: Order): number => {
 
   return order.items.reduce((sum, item) => {
     const shippingPerPieceRmb = totalQty > 0 ? totalShippingRmb / totalQty : 0;
-    // 新算式：(單品 RMB 成本 + 平攤運費 RMB) * 匯率 * (1 + 服務費%) - 平攤折扣 HKD
     const itemCostWithShippingRmb = Number(item.unit_cost_rmb) + shippingPerPieceRmb;
     const itemCostHkd = itemCostWithShippingRmb * rate;
     const rawUnitPriceHkd = (itemCostHkd * (1 + servicePct / 100)) - discountPerPieceHkd;
@@ -105,7 +107,7 @@ const computeOrderGrandTotal = (order: Order): number => {
 };
 
 export default function GiftCreeperApp() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'create_order' | 'orders' | 'print'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'create_order' | 'orders' | 'profits' | 'print'>('dashboard');
   const [clients, setClients] = useState<Client[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrderForPrint, setSelectedOrderForPrint] = useState<Order | null>(null);
@@ -385,7 +387,7 @@ export default function GiftCreeperApp() {
     });
   };
 
-  // 全面採用新計算邏輯：單品 RMB 成本 + 平攤運費 RMB -> 折合 HKD -> 加上服務費 -> 減折扣 -> 四捨五入
+  // 全面採用新計算邏輯
   const calculations = useMemo(() => {
     const totalQty = orderItems.reduce((acc, item) => acc + (Number(item.qty) || 0), 0);
     const subtotalRmb = orderItems.reduce((acc, item) => acc + (Number(item.unit_cost_rmb) * Number(item.qty)), 0);
@@ -395,11 +397,8 @@ export default function GiftCreeperApp() {
 
     const discountPerPieceHkd = totalQty > 0 ? discountHkd / totalQty : 0;
 
-    // 計算每個品項四捨五入後的整數小計，並加總得出總額
     const grandTotalHkd = orderItems.reduce((sum, item) => {
       const shippingPerPieceRmb = totalQty > 0 ? shippingFeeRmb / totalQty : 0;
-      
-      // 新算式邏輯
       const itemCostWithShippingRmb = Number(item.unit_cost_rmb) + shippingPerPieceRmb;
       const itemCostHkd = itemCostWithShippingRmb * exchangeRate;
       const rawUnitPriceHkd = (itemCostHkd * (1 + serviceFeePct / 100)) - discountPerPieceHkd;
@@ -516,18 +515,48 @@ export default function GiftCreeperApp() {
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: Order['status']) => {
+    // 即時本地狀態更新
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     if (supabase) {
       await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
       fetchOrders();
     }
   };
 
+  const handleUpdateActualCost = async (orderId: string, cost: number) => {
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, actual_cost_hkd: cost } : o));
+    if (supabase) {
+      await supabase.from('orders').update({ actual_cost_hkd: cost }).eq('id', orderId);
+    }
+  };
+
+  // 統計數據：排除 Cancelled 狀態
   const stats = useMemo(() => {
-    const totalSales = orders.reduce((acc, o) => acc + (o.grand_total_hkd || 0), 0);
-    const pendingOrders = orders.filter(o => o.status === 'Quoted' || o.status === 'Confirmed').length;
-    const completedOrders = orders.filter(o => o.status === 'Completed').length;
+    const validOrders = orders.filter(o => o.status !== 'Cancelled');
+    const totalSales = validOrders.reduce((acc, o) => acc + (o.grand_total_hkd || 0), 0);
+    const pendingOrders = validOrders.filter(o => o.status === 'Quoted' || o.status === 'Confirmed').length;
+    const completedOrders = validOrders.filter(o => o.status === 'Completed').length;
     return { totalSales, pendingOrders, completedOrders, totalClients: clients.length };
   }, [orders, clients]);
+
+  // 財務分析數據
+  const profitStats = useMemo(() => {
+    const completedList = orders.filter(o => o.status !== 'Cancelled');
+    const totalRevenue = completedList.reduce((acc, o) => acc + (o.grand_total_hkd || 0), 0);
+    
+    // 預設成本算式：若沒有填寫 actual_cost_hkd，預設用 (subtotal_rmb + shipping_fee_rmb) * exchange_rate 計算
+    const totalCost = completedList.reduce((acc, o) => {
+      const cost = o.actual_cost_hkd !== undefined && o.actual_cost_hkd !== null
+        ? Number(o.actual_cost_hkd) 
+        : ((Number(o.subtotal_rmb) || 0) + (Number(o.shipping_fee_rmb) || 0)) * (o.exchange_rate || 1.15);
+      return acc + cost;
+    }, 0);
+
+    const totalProfit = totalRevenue - totalCost;
+    const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+
+    return { totalRevenue, totalCost, totalProfit, profitMargin, completedList };
+  }, [orders]);
 
   return (
     <div className="flex flex-col md:flex-row h-screen bg-slate-100 font-sans text-slate-800 overflow-hidden print:h-auto print:overflow-visible">
@@ -600,6 +629,12 @@ export default function GiftCreeperApp() {
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
             >
               <ListOrdered className="w-5 h-5" /> 訂單列表
+            </button>
+            <button
+              onClick={() => { setActiveTab('profits'); setIsMobileMenuOpen(false); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'profits' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
+            >
+              <PieChart className="w-5 h-5" /> 財務分析 (Profits)
             </button>
             <button
               onClick={() => { setActiveTab('clients'); setIsMobileMenuOpen(false); }}
@@ -700,21 +735,28 @@ export default function GiftCreeperApp() {
                     <tr><th className="p-3">訂單編號</th><th className="p-3">客戶學校</th><th className="p-3">金額 (HKD)</th><th className="p-3">狀態</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {orders.slice(0, 5).map(order => (
-                      <tr key={order.id}>
-                        <td className="p-3 font-mono font-medium text-slate-900">{order.order_no}</td>
-                        <td className="p-3 font-medium">{order.client_name}</td>
-                        <td className="p-3 font-semibold text-slate-900">
-                          HK$ {order.grand_total_hkd.toLocaleString()}
-                          {order.grand_total_hkd > 3500 && (
-                            <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
-                              需訂金
+                    {orders.slice(0, 5).map(order => {
+                      const isCancelled = order.status === 'Cancelled';
+                      return (
+                        <tr key={order.id} className={isCancelled ? 'bg-slate-50/50' : ''}>
+                          <td className={`p-3 font-mono font-medium ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>{order.order_no}</td>
+                          <td className={`p-3 font-medium ${isCancelled ? 'line-through text-slate-400' : ''}`}>{order.client_name}</td>
+                          <td className={`p-3 font-semibold ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                            HK$ {order.grand_total_hkd.toLocaleString()}
+                            {!isCancelled && order.grand_total_hkd > 3500 && (
+                              <span className="ml-2 px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded text-[10px] font-bold">
+                                需訂金
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${isCancelled ? 'bg-slate-200 text-slate-600' : 'bg-amber-100 text-amber-700'}`}>
+                              {order.status}
                             </span>
-                          )}
-                        </td>
-                        <td className="p-3"><span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">{order.status}</span></td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -906,12 +948,13 @@ export default function GiftCreeperApp() {
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">訂單紀錄</h2>
             <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
-              <table className="w-full text-left text-sm text-slate-600 min-w-[700px]">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[800px]">
                 <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
                   <tr>
                     <th className="p-4">訂單編號</th>
                     <th className="p-4">客戶學校</th>
                     <th className="p-4">金額 (HKD)</th>
+                    <th className="p-4">訂單成本 (HKD)</th>
                     <th className="p-4">訂金狀態</th>
                     <th className="p-4">訂單狀態</th>
                     <th className="p-4 text-center">操作</th>
@@ -921,16 +964,43 @@ export default function GiftCreeperApp() {
                   {orders.map(order => {
                     const requiresDeposit = order.grand_total_hkd > 3500;
                     const isConfirmed = ['Confirmed', 'Shipped', 'Completed'].includes(order.status);
-                    
+                    const isCancelled = order.status === 'Cancelled';
+                    const isCompleted = order.status === 'Completed';
+
                     return (
-                      <tr key={order.id} className="hover:bg-slate-50">
-                        <td className="p-4 font-mono font-bold text-slate-900">{order.order_no}</td>
-                        <td className="p-4 font-medium">{order.client_name}</td>
-                        <td className="p-4 font-bold font-mono text-slate-900">
+                      <tr key={order.id} className={`hover:bg-slate-50 ${isCancelled ? 'bg-slate-50/60' : ''}`}>
+                        <td className={`p-4 font-mono font-bold ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
+                          {order.order_no}
+                        </td>
+                        <td className={`p-4 font-medium ${isCancelled ? 'line-through text-slate-400' : ''}`}>
+                          {order.client_name}
+                        </td>
+                        <td className={`p-4 font-bold font-mono ${isCancelled ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                           HK$ {order.grand_total_hkd.toLocaleString()}
                         </td>
+
+                        {/* 訂單成本輸入欄（Completed 狀態顯示） */}
                         <td className="p-4">
-                          {requiresDeposit ? (
+                          {isCompleted ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-slate-400">HK$</span>
+                              <input
+                                type="number"
+                                placeholder="填寫實際成本"
+                                value={order.actual_cost_hkd !== undefined ? order.actual_cost_hkd : ''}
+                                onChange={(e) => handleUpdateActualCost(order.id, parseFloat(e.target.value) || 0)}
+                                className="w-24 border p-1 rounded text-xs font-mono bg-white focus:outline-indigo-500"
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">-</span>
+                          )}
+                        </td>
+
+                        <td className="p-4">
+                          {isCancelled ? (
+                            <span className="text-xs text-slate-400">已取消</span>
+                          ) : requiresDeposit ? (
                             <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-xs font-bold">
                               <CreditCard className="w-3 h-3" /> 50% Deposit
                             </span>
@@ -939,12 +1009,17 @@ export default function GiftCreeperApp() {
                           )}
                         </td>
                         <td className="p-4">
-                          <select value={order.status} onChange={(e) => handleUpdateStatus(order.id, e.target.value as any)} className="bg-slate-100 border text-xs rounded p-1 font-medium">
+                          <select 
+                            value={order.status} 
+                            onChange={(e) => handleUpdateStatus(order.id, e.target.value as any)} 
+                            className={`border text-xs rounded p-1 font-medium ${isCancelled ? 'bg-red-50 text-red-700 border-red-200' : 'bg-slate-100'}`}
+                          >
                             <option value="Draft">Draft</option>
                             <option value="Quoted">Quoted</option>
                             <option value="Confirmed">Confirmed</option>
                             <option value="Shipped">Shipped</option>
                             <option value="Completed">Completed</option>
+                            <option value="Cancelled">Cancelled</option>
                           </select>
                         </td>
                         <td className="p-4 text-center">
@@ -957,7 +1032,7 @@ export default function GiftCreeperApp() {
                               <Printer className="w-3.5 h-3.5" /> 報價單
                             </button>
 
-                            {isConfirmed && (
+                            {isConfirmed && !isCancelled && (
                               <button 
                                 onClick={() => { setSelectedOrderForPrint(order); setPrintDocType('invoice'); setActiveTab('print'); }} 
                                 className="bg-emerald-700 text-white px-2 py-1 rounded text-xs font-medium flex items-center gap-1 hover:bg-emerald-600 shadow-sm"
@@ -992,7 +1067,95 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 4: 客戶管理 */}
+        {/* TAB 4: 財務 / 盈利分析頁面 */}
+        {activeTab === 'profits' && (
+          <div className="space-y-6">
+            <header className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">財務 / 盈利分析 (Profits)</h2>
+                <p className="text-sm text-slate-500">檢視各筆訂單的實質收入、成本與利潤率。</p>
+              </div>
+            </header>
+
+            {/* KPI Summary 區塊 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-blue-100 text-blue-600 rounded-lg shrink-0"><DollarSign className="w-6 h-6" /></div>
+                <div>
+                  <p className="text-xs text-slate-500">總收入 (Revenue)</p>
+                  <h3 className="text-xl font-bold text-slate-900">HK$ {profitStats.totalRevenue.toLocaleString()}</h3>
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-100 text-amber-600 rounded-lg shrink-0"><Tag className="w-6 h-6" /></div>
+                <div>
+                  <p className="text-xs text-slate-500">總成本 (Total Cost)</p>
+                  <h3 className="text-xl font-bold text-slate-900">HK$ {Math.round(profitStats.totalCost).toLocaleString()}</h3>
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-lg shrink-0"><TrendingUp className="w-6 h-6" /></div>
+                <div>
+                  <p className="text-xs text-slate-500">總盈利 (Gross Profit)</p>
+                  <h3 className="text-xl font-bold text-emerald-600">HK$ {Math.round(profitStats.totalProfit).toLocaleString()}</h3>
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-purple-100 text-purple-600 rounded-lg shrink-0"><PieChart className="w-6 h-6" /></div>
+                <div>
+                  <p className="text-xs text-slate-500">平均盈利 % (Margin)</p>
+                  <h3 className="text-xl font-bold text-purple-600">{profitStats.profitMargin.toFixed(1)}%</h3>
+                </div>
+              </div>
+            </div>
+
+            {/* 盈利明細表格 */}
+            <div className="bg-white rounded-xl border shadow-sm overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[700px]">
+                <thead className="bg-slate-50 text-slate-700 font-semibold border-b">
+                  <tr>
+                    <th className="p-4">訂單編號</th>
+                    <th className="p-4">客戶學校</th>
+                    <th className="p-4 text-right">收入 (HKD)</th>
+                    <th className="p-4 text-right">成本 (HKD)</th>
+                    <th className="p-4 text-right">盈利 (HKD)</th>
+                    <th className="p-4 text-right">盈利 %</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {profitStats.completedList.map(order => {
+                    const revenue = order.grand_total_hkd || 0;
+                    const cost = order.actual_cost_hkd !== undefined && order.actual_cost_hkd !== null
+                      ? Number(order.actual_cost_hkd) 
+                      : ((Number(order.subtotal_rmb) || 0) + (Number(order.shipping_fee_rmb) || 0)) * (order.exchange_rate || 1.15);
+                    
+                    const profit = revenue - cost;
+                    const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+                    return (
+                      <tr key={order.id} className="hover:bg-slate-50 font-mono">
+                        <td className="p-4 font-bold text-slate-900">{order.order_no}</td>
+                        <td className="p-4 font-sans font-medium text-slate-800">{order.client_name}</td>
+                        <td className="p-4 text-right text-slate-900 font-bold">HK$ {revenue.toLocaleString()}</td>
+                        <td className="p-4 text-right text-slate-600">HK$ {Math.round(cost).toLocaleString()}</td>
+                        <td className={`p-4 text-right font-bold ${profit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                          HK$ {Math.round(profit).toLocaleString()}
+                        </td>
+                        <td className="p-4 text-right font-bold">
+                          <span className={`px-2 py-0.5 rounded text-xs ${margin >= 20 ? 'bg-emerald-100 text-emerald-800' : margin >= 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'}`}>
+                            {margin.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: 客戶管理 */}
         {activeTab === 'clients' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-slate-900">客戶/學校管理</h2>
@@ -1034,7 +1197,7 @@ export default function GiftCreeperApp() {
           </div>
         )}
 
-        {/* TAB 5: 升級版專業報價單 / INVOICE */}
+        {/* TAB 6: 升級版專業報價單 / INVOICE */}
         {activeTab === 'print' && selectedOrderForPrint && (() => {
           const totalQuantity = selectedOrderForPrint.items.reduce((sum, item) => sum + item.qty, 0);
           const rate = selectedOrderForPrint.exchange_rate || 1.15;
@@ -1186,14 +1349,11 @@ export default function GiftCreeperApp() {
                     {selectedOrderForPrint.items.map((item, idx) => {
                       const shippingPerPieceRmb = totalQuantity > 0 ? totalShippingRmb / totalQuantity : 0;
                       
-                      // 1. 單價採用新算式：(單品 RMB 成本 + 平攤運費 RMB) * 匯率 * (1 + 服務費%) - 平攤折扣 HKD
                       const itemCostWithShippingRmb = item.unit_cost_rmb + shippingPerPieceRmb;
                       const itemCostHkd = itemCostWithShippingRmb * rate;
                       const rawUnitPriceHkd = (itemCostHkd * (1 + servicePct / 100)) - discountPerPieceHkd;
 
                       const unitPriceHkd = Math.round(Math.max(0, rawUnitPriceHkd));
-                      
-                      // 2. 小計 = 四捨五入後的單價 × 數量
                       const itemHkdTotal = unitPriceHkd * item.qty;
 
                       const tradName = convertSimpToTrad(item.name);
@@ -1236,7 +1396,7 @@ export default function GiftCreeperApp() {
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
-                                <p>• FPS轉帳：<strong>132542846</strong></p>
+                                <p>• FPS 轉數快 ID：<strong>132542846</strong></p>
                                 {requiresDeposit && (
                                   <p className={`${isInvoice ? 'text-emerald-900 bg-emerald-100/60' : 'text-indigo-900 bg-indigo-100/60'} font-bold p-1 rounded`}>
                                     • 訂金要求：本單總額超過 HK$3,500，須先付 50% 訂金，餘款於交貨時結清。
