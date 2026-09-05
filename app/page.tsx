@@ -1236,6 +1236,7 @@ export default function GiftCreeperApp() {
                                 </p>
                                 <p>• 支票抬頭請寫：<strong>GIFT CREEPER TRADING CO.</strong></p>
                                 <p>• 銀行轉帳：<strong>恆生銀行 769-695578-883</strong></p>
+                                <p>• FPS轉帳：<strong>(FPS ID)132542846</strong></p>
                                 {requiresDeposit && (
                                   <p className={`${isInvoice ? 'text-emerald-900 bg-emerald-100/60' : 'text-indigo-900 bg-indigo-100/60'} font-bold p-1 rounded`}>
                                     • 訂金要求：本單總額超過 HK$3,500，須先付 50% 訂金，餘款於交貨時結清。
